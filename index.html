@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeSynth – Super IA para Programação</title>
+  <link rel="manifest" href="data:application/manifest+json,{name:'CodeSynth',short_name:'CodeSynth',start_url:'.',display:'standalone',background_color:'#0d1117',theme_color:'#161b22',icons:[]}">
+  <style>
+    body { margin: 0; background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #chat { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; }
+    .msg { padding: 0.8rem; border-radius: 12px; max-width: 85%; word-wrap: break-word; }
+    .user { align-self: flex-end; background: #238636; color: white; }
+    .ai { align-self: flex-start; background: #161b22; border: 1px solid #30363d; white-space: pre-wrap; }
+    pre { background: #0d1117; padding: 0.6rem; border-radius: 8px; overflow-x: auto; }
+    code { font-family: 'Fira Code', monospace; }
+    #input-area { display: flex; padding: 0.8rem; background: #161b22; gap: 0.5rem; }
+    #prompt { flex: 1; padding: 0.8rem; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: white; }
+    button { background: #238636; color: white; border: none; padding: 0.8rem 1.2rem; border-radius: 8px; font-weight: bold; }
+    .loading { opacity: 0.7; }
+    #keys-toggle { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem; margin: 0.5rem; border-radius: 8px; }
+    #keys-panel { display: none; padding: 0.5rem; background: #161b22; margin: 0 0.5rem; border-radius: 8px; }
+    input[type="password"] { width: 100%; padding: 0.5rem; margin: 0.3rem 0; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: white; }
+  </style>
+</head>
+<body>
+  <div id="chat"><div class="msg ai">👋 Sou o CodeSynth. Pergunte algo de programação. Combinarei as respostas das melhores IAs gratuitas.</div></div>
+  <button id="keys-toggle" onclick="toggleKeys()">🔑 Configurar Chaves das APIs</button>
+  <div id="keys-panel">
+    <input type="password" id="groq-key" placeholder="Chave da Groq (groq.com)">
+    <input type="password" id="gemini-key" placeholder="Chave do Google Gemini (aistudio.google.com)">
+    <input type="password" id="openrouter-key" placeholder="Chave do OpenRouter (openrouter.ai)">
+    <input type="password" id="hf-key" placeholder="Chave do Hugging Face (hf.co/settings/tokens)">
+    <small>As chaves ficam salvas apenas no seu celular.</small>
+  </div>
+  <div id="input-area">
+    <input id="prompt" placeholder="Ex.: Explique como funciona uma closure em JavaScript" autofocus>
+    <button onclick="ask()">Enviar</button>
+  </div>
+
+  <script>
+    // Configuração das APIs gratuitas (troque pelas suas chaves no painel)
+    const APIS = [
+      {
+        name: 'Groq (Llama 3.3 70B)',
+        url: 'https://api.groq.com/openai/v1/chat/completions',
+        key: () => localStorage.getItem('groq_key'),
+        body: (p) => JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{role:'user',content:p}], temperature:0.2 }),
+        parse: (data) => data.choices[0].message.content
+      },
+      {
+        name: 'Gemini Flash',
+        url: () => `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${localStorage.getItem('gemini_key')}`,
+        key: () => localStorage.getItem('gemini_key'),
+        body: (p) => JSON.stringify({ contents: [{parts:[{text:p}]}] }),
+        parse: (data) => data.candidates[0].content.parts[0].text
+      },
+      {
+        name: 'OpenRouter (Qwen 2.5 Coder)',
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        key: () => localStorage.getItem('openrouter_key'),
+        body: (p) => JSON.stringify({ model: 'qwen/qwen-2.5-coder-32b-instruct:free', messages: [{role:'user',content:p}] }),
+        parse: (data) => data.choices[0].message.content,
+        headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'HTTP-Referer': location.origin, 'X-Title': 'CodeSynth' })
+      },
+      {
+        name: 'Hugging Face (StarCoder)',
+        url: 'https://api-inference.huggingface.co/models/bigcode/starcoder2-15b',
+        key: () => localStorage.getItem('hf_key'),
+        body: (p) => JSON.stringify({ inputs: p, parameters: { max_new_tokens: 500 } }),
+        parse: (data) => data[0].generated_text,
+        headers: (key) => ({ 'Authorization': `Bearer ${key}` })
+      }
+    ];
+
+    const chatDiv = document.getElementById('chat');
+    const promptInput = document.getElementById('prompt');
+
+    async function ask() {
+      const question = promptInput.value.trim();
+      if (!question) return;
+      addMessage('user', question);
+      promptInput.value = '';
+      const loadingMsg = addMessage('ai', '⏳ Consultando múltiplas IAs...', true);
+
+      try {
+        // Busca paralela em todas as APIs configuradas
+        const promises = APIS.map(async (api) => {
+          const key = api.key();
+          if (!key) return null;
+          try {
+            const headers = { 'Content-Type': 'application/json', ...(api.headers ? api.headers(key) : { 'Authorization': `Bearer ${key}` }) };
+            const res = await fetch(typeof api.url === 'function' ? api.url() : api.url, {
+              method: 'POST', headers, body: api.body(question)
+            });
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+            return { name: api.name, text: api.parse(data) };
+          } catch (e) {
+            console.warn(`${api.name} falhou:`, e);
+            return null;
+          }
+        });
+
+        const results = (await Promise.all(promises)).filter(r => r !== null);
+
+        if (results.length === 0) {
+          updateMessage(loadingMsg, '❌ Nenhuma IA respondeu. Verifique as chaves ou tente mais tarde.');
+          return;
+        }
+
+        // Mecanismo de orquestração: usar a melhor resposta ou pedir ao Gemini para sintetizar
+        let finalText;
+        if (results.length === 1) {
+          finalText = `🤖 ${results[0].name}:\n\n${results[0].text}`;
+        } else {
+          // Tenta usar Gemini como juiz, senão pega a resposta mais longa
+          const geminiKey = localStorage.getItem('gemini_key');
+          if (geminiKey) {
+            try {
+              const combined = results.map((r, i) => `Resposta ${i+1} (${r.name}):\n${r.text}`).join('\n\n---\n\n');
+              const judgePrompt = `Avalie as seguintes respostas à pergunta: "${question}". Combine o melhor de cada uma em uma única resposta clara, completa e com exemplos de código se relevante. Não mencione as fontes, apenas entregue a resposta combinada.\n\n${combined}`;
+              const jRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ contents: [{parts:[{text:judgePrompt}]}] })
+              });
+              const jData = await jRes.json();
+              finalText = `🧠 Resposta combinada (a partir de ${results.length} IAs):\n\n${jData.candidates[0].content.parts[0].text}`;
+            } catch (e) {
+              // Fallback: resposta mais longa
+              const best = results.reduce((a,b) => a.text.length > b.text.length ? a : b);
+              finalText = `⚠️ Não foi possível combinar, exibindo a resposta mais completa (${best.name}):\n\n${best.text}`;
+            }
+          } else {
+            const best = results.reduce((a,b) => a.text.length > b.text.length ? a : b);
+            finalText = `📌 Sem chave Gemini para combinar, melhor resposta (${best.name}):\n\n${best.text}`;
+          }
+        }
+
+        updateMessage(loadingMsg, finalText);
+        // Salvar no histórico simples (localStorage)
+        saveHistory(question, finalText);
+      } catch (err) {
+        updateMessage(loadingMsg, `🔥 Erro geral: ${err.message}`);
+      }
+    }
+
+    function addMessage(role, text, isLoading = false) {
+      const div = document.createElement('div');
+      div.className = `msg ${role}` + (isLoading ? ' loading' : '');
+      div.textContent = text;
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return div;
+    }
+
+    function updateMessage(element, newText) {
+      element.textContent = newText;
+      element.classList.remove('loading');
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    function toggleKeys() {
+      const panel = document.getElementById('keys-panel');
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Salvar chaves automaticamente ao digitar
+    ['groq-key','gemini-key','openrouter-key','hf-key'].forEach(id => {
+      const el = document.getElementById(id);
+      const storageKey = id.replace('-key','_key');
+      el.value = localStorage.getItem(storageKey) || '';
+      el.addEventListener('input', () => localStorage.setItem(storageKey, el.value));
+    });
+
+    function saveHistory(q, a) {
+      const history = JSON.parse(localStorage.getItem('chat_history') || '[]');
+      history.push({ q, a, time: Date.now() });
+      if (history.length > 50) history.shift();
+      localStorage.setItem('chat_history', JSON.stringify(history));
+    }
+  </script>
+</body>
+</html>
