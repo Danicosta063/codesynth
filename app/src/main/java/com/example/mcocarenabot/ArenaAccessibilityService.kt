@@ -8,16 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import kotlin.random.Random
 
-/**
- * Serviço de Acessibilidade responsável por simular os toques do farm de Arena.
- *
- * Importante: o MCOC (como a maioria dos jogos) renderiza tudo numa superfície
- * gráfica única (OpenGL/Canvas), então NÃO expõe uma árvore de UI acessível.
- * Por isso este serviço não lê o conteúdo da tela — ele só despacha gestos
- * (toques) em coordenadas pré-calibradas, com timing fixo.
- */
 class ArenaAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -33,10 +24,7 @@ class ArenaAccessibilityService : AccessibilityService() {
         startService(Intent(this, OverlayService::class.java))
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Sem uso — mantido apenas porque a classe base exige a implementação.
-    }
-
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -44,8 +32,6 @@ class ArenaAccessibilityService : AccessibilityService() {
         instance = null
         return super.onUnbind(intent)
     }
-
-    // ---------- Controle público (chamado pelo OverlayService) ----------
 
     fun startBot() {
         if (isRunning) return
@@ -64,29 +50,30 @@ class ArenaAccessibilityService : AccessibilityService() {
     fun isBotRunning() = isRunning
     fun getFightsCompleted() = fightsCompleted
 
-    // ---------- Máquina de estados do farm de Arena ----------
+    private val runLoop = Runnable { if (isRunning) seriesCycle() }
 
-    private val runLoop = Runnable { if (isRunning) farmCycle() }
-
-    private fun farmCycle() {
-        val coords = Coordinates.load(prefs)
-        if (!coords.isCalibrated()) {
-            Log.w(TAG, "Coordenadas não calibradas — calibre pelo widget flutuante antes de iniciar.")
+    private fun seriesCycle() {
+        val c = Coordinates.load(prefs)
+        if (!c.isCalibrated()) {
+            Log.w(TAG, "Coordenadas nao calibradas - calibre pelo widget antes de iniciar.")
             stopBot()
             return
         }
 
-        tap(coords.championSlot.x, coords.championSlot.y)          // 1. seleciona campeão
-        delay(600) {
-            tap(coords.fightButton.x, coords.fightButton.y)         // 2. inicia a luta
-            delay(FIGHT_LOAD_DELAY_MS) {
-                spamAttacks(coords, FIGHT_DURATION_TAPS) {           // 3. combate
-                    delay(POST_FIGHT_DELAY_MS) {
-                        tap(coords.continueButton1.x, coords.continueButton1.y)  // 4. telas pós-luta
-                        delay(800) {
-                            tap(coords.continueButton2.x, coords.continueButton2.y)
-                            fightsCompleted++
-                            delay(700) { handler.post(runLoop) }      // 5. repete
+        tap(c.quickSelect)
+        delay(SHORT) {
+            tap(c.findMatch)
+            delay(MATCHMAKING_DELAY_MS) {
+                tap(c.selectFight)
+                delay(SHORT) {
+                    tap(c.continueAfterSelect)
+                    delay(SHORT) {
+                        tap(c.accept)
+                        delay(SHORT) {
+                            tap(c.continueBeforeFight)
+                            delay(FIGHT_LOAD_DELAY_MS) {
+                                runFight(c, FIGHTS_PER_SERIES)
+                            }
                         }
                     }
                 }
@@ -94,16 +81,48 @@ class ArenaAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun spamAttacks(coords: Coordinates, remaining: Int, onDone: () -> Unit) {
+    private fun runFight(c: Coordinates, fightsLeft: Int) {
+        if (!isRunning) return
+
+        if (fightsLeft <= 0) {
+            delay(REWARDS_LOAD_DELAY_MS) {
+                tap(c.nextSeries)
+                delay(SHORT) { handler.post(runLoop) }
+            }
+            return
+        }
+
+        if (USE_AUTOPLAY_BUTTON) {
+            tap(c.autoplayButton)
+            delay(AUTOPLAY_FIGHT_WAIT_MS) { afterFight(c, fightsLeft) }
+        } else {
+            spamAttacks(c, FIGHT_DURATION_TAPS) { afterFight(c, fightsLeft) }
+        }
+    }
+
+    private fun afterFight(c: Coordinates, fightsLeft: Int) {
+        delay(KO_DELAY_MS) {
+            tap(c.attackZone)
+            delay(SHORT) {
+                tap(c.continueAfterFight)
+                fightsCompleted++
+                delay(SHORT) { runFight(c, fightsLeft - 1) }
+            }
+        }
+    }
+
+    private fun spamAttacks(c: Coordinates, remaining: Int, onDone: () -> Unit) {
         if (!isRunning) return
         if (remaining <= 0) { onDone(); return }
-        tap(coords.attackZone.x, coords.attackZone.y)
-        handler.postDelayed({ spamAttacks(coords, remaining - 1, onDone) }, Random.nextLong(280, 420))
+        tap(c.attackZone)
+        handler.postDelayed({ spamAttacks(c, remaining - 1, onDone) }, kotlin.random.Random.nextLong(280, 420))
     }
 
     private fun delay(ms: Long, action: () -> Unit) {
         handler.postDelayed({ if (isRunning) action() }, ms)
     }
+
+    private fun tap(p: Point) = tap(p.x, p.y)
 
     private fun tap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
@@ -120,9 +139,17 @@ class ArenaAccessibilityService : AccessibilityService() {
         private const val TAG = "ArenaBot"
         const val PREFS_NAME = "mcoc_bot"
 
-        // Ajuste estes valores conforme a duração real das suas lutas de Arena.
-        const val FIGHT_DURATION_TAPS = 40      // nº de toques durante o combate
-        const val FIGHT_LOAD_DELAY_MS = 3500L   // espera a luta carregar
-        const val POST_FIGHT_DELAY_MS = 1800L   // espera a animação de vitória
+        const val FIGHTS_PER_SERIES = 3
+        const val SHORT = 700L
+        const val MATCHMAKING_DELAY_MS = 2000L
+        const val FIGHT_LOAD_DELAY_MS = 3500L
+        const val KO_DELAY_MS = 2000L
+        const val REWARDS_LOAD_DELAY_MS = 2000L
+
+        // true = toca 1x no botao de autoplay do jogo e so espera
+        // false = fica tocando na zona de ataque, sem defesa nenhuma
+        const val USE_AUTOPLAY_BUTTON = false
+        const val AUTOPLAY_FIGHT_WAIT_MS = 25000L
+        const val FIGHT_DURATION_TAPS = 70
     }
 }

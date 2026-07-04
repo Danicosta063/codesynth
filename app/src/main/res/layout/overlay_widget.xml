@@ -3,7 +3,6 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content">
 
-    <!-- Camada full-screen usada só durante a calibração, pra capturar 1 toque por etapa -->
     <View
         android:id="@+id/calibrationCatcher"
         android:layout_width="match_parent"
@@ -57,6 +56,15 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🎯"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="8dp" />
+
+            <Button
+                android:id="@+id/btnClose"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✕"
                 android:minWidth="0dp"
                 android:minHeight="0dp"
                 android:padding="8dp" />

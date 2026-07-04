@@ -99,6 +99,10 @@ class OverlayService : Service() {
         widgetView.findViewById<View>(R.id.btnCalibrate).setOnClickListener {
             startCalibration()
         }
+        widgetView.findViewById<View>(R.id.btnClose).setOnClickListener {
+            ArenaAccessibilityService.instance?.stopBot()
+            stopSelf()
+        }
     }
 
     private fun updateStatusText() {
@@ -153,11 +157,16 @@ class OverlayService : Service() {
 
     private fun finishCalibration() {
         val coords = Coordinates(
-            championSlot = tempCoords["championSlot"] ?: Point(0f, 0f),
-            fightButton = tempCoords["fightButton"] ?: Point(0f, 0f),
+            quickSelect = tempCoords["quickSelect"] ?: Point(0f, 0f),
+            findMatch = tempCoords["findMatch"] ?: Point(0f, 0f),
+            selectFight = tempCoords["selectFight"] ?: Point(0f, 0f),
+            continueAfterSelect = tempCoords["continueAfterSelect"] ?: Point(0f, 0f),
+            accept = tempCoords["accept"] ?: Point(0f, 0f),
+            continueBeforeFight = tempCoords["continueBeforeFight"] ?: Point(0f, 0f),
             attackZone = tempCoords["attackZone"] ?: Point(0f, 0f),
-            continueButton1 = tempCoords["continueButton1"] ?: Point(0f, 0f),
-            continueButton2 = tempCoords["continueButton2"] ?: Point(0f, 0f)
+            continueAfterFight = tempCoords["continueAfterFight"] ?: Point(0f, 0f),
+            nextSeries = tempCoords["nextSeries"] ?: Point(0f, 0f),
+            autoplayButton = tempCoords["autoplayButton"] ?: Point(0f, 0f)
         )
         coords.save(prefs)
         calibrationStepIndex = -1

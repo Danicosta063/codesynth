@@ -6,47 +6,65 @@ data class Point(val x: Float, val y: Float) {
     fun isSet() = x > 0f && y > 0f
 }
 
-/**
- * Coordenadas calibradas pelo usuário para cada etapa do ciclo de farm.
- * Persistidas em SharedPreferences, já que variam por aparelho/resolução.
- */
 data class Coordinates(
-    val championSlot: Point,
-    val fightButton: Point,
+    val quickSelect: Point,
+    val findMatch: Point,
+    val selectFight: Point,
+    val continueAfterSelect: Point,
+    val accept: Point,
+    val continueBeforeFight: Point,
     val attackZone: Point,
-    val continueButton1: Point,
-    val continueButton2: Point
+    val continueAfterFight: Point,
+    val nextSeries: Point,
+    val autoplayButton: Point
 ) {
     fun isCalibrated(): Boolean =
-        championSlot.isSet() && fightButton.isSet() && attackZone.isSet() &&
-            continueButton1.isSet() && continueButton2.isSet()
+        quickSelect.isSet() && findMatch.isSet() && selectFight.isSet() &&
+            continueAfterSelect.isSet() && accept.isSet() && continueBeforeFight.isSet() &&
+            attackZone.isSet() && continueAfterFight.isSet() && nextSeries.isSet()
 
     fun save(prefs: SharedPreferences) {
         prefs.edit().apply {
-            putFloat("championSlot_x", championSlot.x); putFloat("championSlot_y", championSlot.y)
-            putFloat("fightButton_x", fightButton.x); putFloat("fightButton_y", fightButton.y)
-            putFloat("attackZone_x", attackZone.x); putFloat("attackZone_y", attackZone.y)
-            putFloat("continueButton1_x", continueButton1.x); putFloat("continueButton1_y", continueButton1.y)
-            putFloat("continueButton2_x", continueButton2.x); putFloat("continueButton2_y", continueButton2.y)
+            listOf(
+                "quickSelect" to quickSelect, "findMatch" to findMatch, "selectFight" to selectFight,
+                "continueAfterSelect" to continueAfterSelect, "accept" to accept,
+                "continueBeforeFight" to continueBeforeFight, "attackZone" to attackZone,
+                "continueAfterFight" to continueAfterFight, "nextSeries" to nextSeries,
+                "autoplayButton" to autoplayButton
+            ).forEach { (key, p) ->
+                putFloat("${key}_x", p.x); putFloat("${key}_y", p.y)
+            }
         }.apply()
     }
 
     companion object {
-        fun load(prefs: SharedPreferences): Coordinates = Coordinates(
-            championSlot = Point(prefs.getFloat("championSlot_x", 0f), prefs.getFloat("championSlot_y", 0f)),
-            fightButton = Point(prefs.getFloat("fightButton_x", 0f), prefs.getFloat("fightButton_y", 0f)),
-            attackZone = Point(prefs.getFloat("attackZone_x", 0f), prefs.getFloat("attackZone_y", 0f)),
-            continueButton1 = Point(prefs.getFloat("continueButton1_x", 0f), prefs.getFloat("continueButton1_y", 0f)),
-            continueButton2 = Point(prefs.getFloat("continueButton2_x", 0f), prefs.getFloat("continueButton2_y", 0f))
-        )
+        fun load(prefs: SharedPreferences): Coordinates {
+            fun p(key: String) = Point(prefs.getFloat("${key}_x", 0f), prefs.getFloat("${key}_y", 0f))
+            return Coordinates(
+                quickSelect = p("quickSelect"),
+                findMatch = p("findMatch"),
+                selectFight = p("selectFight"),
+                continueAfterSelect = p("continueAfterSelect"),
+                accept = p("accept"),
+                continueBeforeFight = p("continueBeforeFight"),
+                attackZone = p("attackZone"),
+                continueAfterFight = p("continueAfterFight"),
+                nextSeries = p("nextSeries"),
+                autoplayButton = p("autoplayButton")
+            )
+        }
 
-        // key interno -> texto exibido durante a calibração, nesta ordem.
         val STEPS = listOf(
-            "championSlot" to "Toque no slot do campeão",
-            "fightButton" to "Toque no botão de Lutar",
-            "attackZone" to "Toque numa área central da tela de luta (zona de ataque)",
-            "continueButton1" to "Toque no botão Continuar (1ª tela pós-luta)",
-            "continueButton2" to "Toque no botão Continuar (2ª tela pós-luta)"
+            "quickSelect" to "Toque em SELEÇÃO RÁPIDA",
+            "findMatch" to "Toque em ENCONTRAR PARTIDA",
+            "selectFight" to "Toque na luta de baixo (última opção da lista)",
+            "continueAfterSelect" to "Toque em CONTINUAR (após escolher a luta)",
+            "accept" to "Toque em ACEITAR",
+            "continueBeforeFight" to "Toque em CONTINUAR (antes da luta começar)",
+            "attackZone" to "Toque numa área central da tela de luta (ataque)",
+            "continueAfterFight" to "Toque em CONTINUAR (depois de cada luta)",
+            "nextSeries" to "Toque em PRÓXIMA SÉRIE",
+            "autoplayButton" to "Se tiver botão de autoplay/luta automática, toque nele agora (senão, toque em qualquer canto vazio)"
         )
     }
 }
