@@ -23,7 +23,6 @@ class OverlayService : Service() {
     private lateinit var prefs: SharedPreferences
 
     private var calibrationStepIndex = -1
-    private val tempCoords = mutableMapOf<String, Point>()
 
     override fun onCreate() {
         super.onCreate()
@@ -106,22 +105,25 @@ class OverlayService : Service() {
     }
 
     private fun updateStatusText() {
-        val running = ArenaAccessibilityService.instance?.isBotRunning() ?: false
-        val fights = ArenaAccessibilityService.instance?.getFightsCompleted() ?: 0
+        val svc = ArenaAccessibilityService.instance
+        val running = svc?.isBotRunning() ?: false
+        val fights = svc?.getFightsCompleted() ?: 0
+        val note = svc?.getStatusNote() ?: ""
         widgetView.findViewById<TextView>(R.id.statusLabel).text =
-            if (running) "Rodando • $fights lutas" else "Parado"
+            if (running) "Rodando • $fights lutas • $note" else "Parado"
     }
 
     private fun startCalibration() {
         calibrationStepIndex = 0
-        tempCoords.clear()
         setFullscreenCaptureMode(true)
         showCalibrationPrompt()
     }
 
     private fun showCalibrationPrompt() {
         if (calibrationStepIndex >= Coordinates.STEPS.size) {
-            finishCalibration()
+            calibrationStepIndex = -1
+            setFullscreenCaptureMode(false)
+            updateStatusText()
             return
         }
         widgetView.findViewById<TextView>(R.id.statusLabel).text =
@@ -147,31 +149,22 @@ class OverlayService : Service() {
         widgetView.findViewById<View>(R.id.calibrationCatcher).setOnTouchListener { _, event ->
             if (event.action == MotionEvent.ACTION_DOWN && calibrationStepIndex in Coordinates.STEPS.indices) {
                 val key = Coordinates.STEPS[calibrationStepIndex].first
-                tempCoords[key] = Point(event.rawX, event.rawY)
-                calibrationStepIndex++
-                showCalibrationPrompt()
+                val x = event.rawX
+                val y = event.rawY
+                widgetView.findViewById<TextView>(R.id.statusLabel).text = "Lendo tela..."
+                val sampled = ArenaAccessibilityService.instance?.samplePixel(x.toInt(), y.toInt()) { color ->
+                    Coordinates.save(prefs, key, CalibPoint(x, y, color ?: 0))
+                    calibrationStepIndex++
+                    showCalibrationPrompt()
+                }
+                if (sampled == null) {
+                    Coordinates.save(prefs, key, CalibPoint(x, y, 0))
+                    calibrationStepIndex++
+                    showCalibrationPrompt()
+                }
             }
             true
         }
-    }
-
-    private fun finishCalibration() {
-        val coords = Coordinates(
-            quickSelect = tempCoords["quickSelect"] ?: Point(0f, 0f),
-            findMatch = tempCoords["findMatch"] ?: Point(0f, 0f),
-            selectFight = tempCoords["selectFight"] ?: Point(0f, 0f),
-            continueAfterSelect = tempCoords["continueAfterSelect"] ?: Point(0f, 0f),
-            accept = tempCoords["accept"] ?: Point(0f, 0f),
-            continueBeforeFight = tempCoords["continueBeforeFight"] ?: Point(0f, 0f),
-            attackZone = tempCoords["attackZone"] ?: Point(0f, 0f),
-            continueAfterFight = tempCoords["continueAfterFight"] ?: Point(0f, 0f),
-            nextSeries = tempCoords["nextSeries"] ?: Point(0f, 0f),
-            autoplayButton = tempCoords["autoplayButton"] ?: Point(0f, 0f)
-        )
-        coords.save(prefs)
-        calibrationStepIndex = -1
-        setFullscreenCaptureMode(false)
-        updateStatusText()
     }
 
     override fun onDestroy() {

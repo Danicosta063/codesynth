@@ -3,10 +3,13 @@ package com.example.mcocarenabot
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 
 class ArenaAccessibilityService : AccessibilityService() {
@@ -14,6 +17,7 @@ class ArenaAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var isRunning = false
     private var fightsCompleted = 0
+    private var statusNote = ""
     private lateinit var prefs: android.content.SharedPreferences
 
     override fun onServiceConnected() {
@@ -35,10 +39,15 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     fun startBot() {
         if (isRunning) return
+        if (!Coordinates.isFullyCalibrated(prefs)) {
+            Log.w(TAG, "Calibre (🎯) antes de iniciar.")
+            return
+        }
         isRunning = true
         fightsCompleted = 0
+        statusNote = ""
         startService(Intent(this, BotForegroundService::class.java))
-        handler.post(runLoop)
+        runMenuSteps(0) { runFight(FIGHTS_PER_SERIES) }
     }
 
     fun stopBot() {
@@ -49,80 +58,123 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     fun isBotRunning() = isRunning
     fun getFightsCompleted() = fightsCompleted
+    fun getStatusNote() = statusNote
 
-    private val runLoop = Runnable { if (isRunning) seriesCycle() }
+    fun samplePixel(x: Int, y: Int, callback: (Int?) -> Unit) {
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    try {
+                        val hw = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                        val bmp = hw?.copy(Bitmap.Config.ARGB_8888, false)
+                        screenshot.hardwareBuffer.close()
+                        val color = if (bmp != null && x in 0 until bmp.width && y in 0 until bmp.height) {
+                            bmp.getPixel(x, y)
+                        } else null
+                        bmp?.recycle()
+                        callback(color)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Erro lendo screenshot: ${e.message}")
+                        callback(null)
+                    }
+                }
 
-    private fun seriesCycle() {
-        val c = Coordinates.load(prefs)
-        if (!c.isCalibrated()) {
-            Log.w(TAG, "Coordenadas nao calibradas - calibre pelo widget antes de iniciar.")
+                override fun onFailure(errorCode: Int) {
+                    callback(null)
+                }
+            })
+        } catch (e: Exception) {
+            Log.w(TAG, "takeScreenshot falhou: ${e.message}")
+            callback(null)
+        }
+    }
+
+    private fun colorsClose(a: Int, b: Int): Boolean {
+        if (b == 0) return false
+        return Math.abs(Color.red(a) - Color.red(b)) < COLOR_TOLERANCE &&
+            Math.abs(Color.green(a) - Color.green(b)) < COLOR_TOLERANCE &&
+            Math.abs(Color.blue(a) - Color.blue(b)) < COLOR_TOLERANCE
+    }
+
+    private val menuKeys = listOf(
+        "quickSelect", "findMatch", "selectFight",
+        "continueAfterSelect", "accept", "continueBeforeFight"
+    )
+
+    private fun runMenuSteps(index: Int, onDone: () -> Unit) {
+        if (!isRunning) return
+        if (index >= menuKeys.size) { onDone(); return }
+        val key = menuKeys[index]
+        statusNote = key
+        waitAndTap(key, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+            runMenuSteps(index + 1, onDone)
+        }
+    }
+
+    private fun runFight(fightsLeft: Int) {
+        if (!isRunning) return
+        if (fightsLeft <= 0) {
+            statusNote = "recompensas"
+            waitAndTap("nextSeries", System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+                runMenuSteps(0) { runFight(FIGHTS_PER_SERIES) }
+            }
+            return
+        }
+        statusNote = "lutando (${FIGHTS_PER_SERIES - fightsLeft + 1}/$FIGHTS_PER_SERIES)"
+        fightTick(System.currentTimeMillis() + FIGHT_TIMEOUT_MS, fightsLeft)
+    }
+
+    private fun fightTick(deadline: Long, fightsLeft: Int) {
+        if (!isRunning) return
+        val cf = Coordinates.load(prefs, "continueAfterFight")
+        val az = Coordinates.load(prefs, "attackZone")
+
+        if (System.currentTimeMillis() > deadline) {
+            proceedAfterFight(fightsLeft)
+            return
+        }
+
+        samplePixel(cf.x.toInt(), cf.y.toInt()) { color ->
+            if (!isRunning) return@samplePixel
+            if (color != null && colorsClose(color, cf.color)) {
+                proceedAfterFight(fightsLeft)
+            } else {
+                tap(az.x, az.y)
+                handler.postDelayed({ fightTick(deadline, fightsLeft) }, ATTACK_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun proceedAfterFight(fightsLeft: Int) {
+        fightsCompleted++
+        waitAndTap("continueAfterFight", System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+            runFight(fightsLeft - 1)
+        }
+    }
+
+    private fun waitAndTap(key: String, deadline: Long, onDone: () -> Unit) {
+        if (!isRunning) return
+        val point = Coordinates.load(prefs, key)
+        if (!point.isSet()) {
+            Log.w(TAG, "Ponto '$key' nao calibrado.")
             stopBot()
             return
         }
-
-        tap(c.quickSelect)
-        delay(SHORT) {
-            tap(c.findMatch)
-            delay(MATCHMAKING_DELAY_MS) {
-                tap(c.selectFight)
-                delay(SHORT) {
-                    tap(c.continueAfterSelect)
-                    delay(SHORT) {
-                        tap(c.accept)
-                        delay(SHORT) {
-                            tap(c.continueBeforeFight)
-                            delay(FIGHT_LOAD_DELAY_MS) {
-                                runFight(c, FIGHTS_PER_SERIES)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private fun runFight(c: Coordinates, fightsLeft: Int) {
-        if (!isRunning) return
-
-        if (fightsLeft <= 0) {
-            delay(REWARDS_LOAD_DELAY_MS) {
-                tap(c.nextSeries)
-                delay(SHORT) { handler.post(runLoop) }
-            }
+        if (System.currentTimeMillis() > deadline) {
+            tap(point.x, point.y)
+            handler.postDelayed({ onDone() }, SETTLE_MS)
             return
         }
-
-        if (USE_AUTOPLAY_BUTTON) {
-            tap(c.autoplayButton)
-            delay(AUTOPLAY_FIGHT_WAIT_MS) { afterFight(c, fightsLeft) }
-        } else {
-            spamAttacks(c, FIGHT_DURATION_TAPS) { afterFight(c, fightsLeft) }
-        }
-    }
-
-    private fun afterFight(c: Coordinates, fightsLeft: Int) {
-        delay(KO_DELAY_MS) {
-            tap(c.attackZone)
-            delay(SHORT) {
-                tap(c.continueAfterFight)
-                fightsCompleted++
-                delay(SHORT) { runFight(c, fightsLeft - 1) }
+        samplePixel(point.x.toInt(), point.y.toInt()) { color ->
+            if (!isRunning) return@samplePixel
+            if (color != null && colorsClose(color, point.color)) {
+                tap(point.x, point.y)
+                handler.postDelayed({ onDone() }, SETTLE_MS)
+            } else {
+                handler.postDelayed({ waitAndTap(key, deadline, onDone) }, POLL_INTERVAL_MS)
             }
         }
     }
-
-    private fun spamAttacks(c: Coordinates, remaining: Int, onDone: () -> Unit) {
-        if (!isRunning) return
-        if (remaining <= 0) { onDone(); return }
-        tap(c.attackZone)
-        handler.postDelayed({ spamAttacks(c, remaining - 1, onDone) }, kotlin.random.Random.nextLong(280, 420))
-    }
-
-    private fun delay(ms: Long, action: () -> Unit) {
-        handler.postDelayed({ if (isRunning) action() }, ms)
-    }
-
-    private fun tap(p: Point) = tap(p.x, p.y)
 
     private fun tap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
@@ -140,16 +192,11 @@ class ArenaAccessibilityService : AccessibilityService() {
         const val PREFS_NAME = "mcoc_bot"
 
         const val FIGHTS_PER_SERIES = 3
-        const val SHORT = 700L
-        const val MATCHMAKING_DELAY_MS = 2000L
-        const val FIGHT_LOAD_DELAY_MS = 3500L
-        const val KO_DELAY_MS = 2000L
-        const val REWARDS_LOAD_DELAY_MS = 2000L
-
-        // true = toca 1x no botao de autoplay do jogo e so espera
-        // false = fica tocando na zona de ataque, sem defesa nenhuma
-        const val USE_AUTOPLAY_BUTTON = false
-        const val AUTOPLAY_FIGHT_WAIT_MS = 25000L
-        const val FIGHT_DURATION_TAPS = 70
+        const val COLOR_TOLERANCE = 30
+        const val POLL_INTERVAL_MS = 700L
+        const val SETTLE_MS = 500L
+        const val STEP_TIMEOUT_MS = 20000L
+        const val FIGHT_TIMEOUT_MS = 90000L
+        const val ATTACK_INTERVAL_MS = 350L
     }
 }
