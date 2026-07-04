@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MCOC Arena Bot</string>
+    <string name="accessibility_service_description">Permite que o MCOC Arena Bot simule toques na tela para automatizar o farm de Arena. Não lê conteúdo de outros apps nem envia dados pela internet.</string>
+</resources>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <!-- Camada full-screen usada só durante a calibração, pra capturar 1 toque por etapa -->
+    <View
+        android:id="@+id/calibrationCatcher"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#33000000"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#DD1A1A2E"
+        android:padding="8dp"
+        android:elevation="8dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/dragHandle"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:text="⠿"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:gravity="center" />
+
+            <Button
+                android:id="@+id/btnStart"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▶"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="8dp" />
+
+            <Button
+                android:id="@+id/btnStop"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⏸"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="8dp" />
+
+            <Button
+                android:id="@+id/btnCalibrate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎯"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="8dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/statusLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Parado"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+</FrameLayout>
