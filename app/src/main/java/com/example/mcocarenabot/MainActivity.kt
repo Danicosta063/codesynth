@@ -32,7 +32,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btnOpenMCOC).setOnClickListener {
-            // Package oficial do MCOC na Google Play: com.kabam.marvelbattle
             val launchIntent = packageManager.getLaunchIntentForPackage("com.kabam.marvelbattle")
             if (launchIntent != null) {
                 startActivity(launchIntent)
@@ -53,6 +52,9 @@ class MainActivity : AppCompatActivity() {
         statusText.text = buildString {
             append(if (accessibilityEnabled) "✅ Serviço de Acessibilidade ativo\n" else "❌ Serviço de Acessibilidade desativado\n")
             append(if (overlayEnabled) "✅ Permissão de sobreposição concedida" else "❌ Permissão de sobreposição pendente")
+        }
+        if (accessibilityEnabled && overlayEnabled) {
+            startService(Intent(this, OverlayService::class.java))
         }
     }
 

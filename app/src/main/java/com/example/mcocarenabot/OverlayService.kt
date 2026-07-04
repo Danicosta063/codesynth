@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -14,11 +15,6 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 
-/**
- * Widget flutuante com os controles do bot: Iniciar, Parar e Calibrar.
- * Durante a calibração, o widget vira uma camada transparente de tela cheia
- * que captura um toque por etapa e grava a coordenada em SharedPreferences.
- */
 class OverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
@@ -31,6 +27,12 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        if (!Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return
+        }
+
         prefs = getSharedPreferences(ArenaAccessibilityService.PREFS_NAME, MODE_PRIVATE)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         widgetView = LayoutInflater.from(this).inflate(R.layout.overlay_widget, null)
@@ -105,8 +107,6 @@ class OverlayService : Service() {
         widgetView.findViewById<TextView>(R.id.statusLabel).text =
             if (running) "Rodando • $fights lutas" else "Parado"
     }
-
-    // ---------- Calibração ----------
 
     private fun startCalibration() {
         calibrationStepIndex = 0
