@@ -23,6 +23,7 @@ class ArenaAccessibilityService : AccessibilityService() {
     private var isRunning = false
     private var fightsCompleted = 0
     private var statusNote = ""
+    private var lastCaptureOk = true
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -61,27 +62,53 @@ class ArenaAccessibilityService : AccessibilityService() {
     fun getStatusNote() = statusNote
 
     private fun captureBitmap(callback: (Bitmap?) -> Unit) {
+        var responded = false
+        val timeoutRunnable = Runnable {
+            if (!responded) {
+                responded = true
+                Log.w(TAG, "takeScreenshot sem resposta em ${CAPTURE_TIMEOUT_MS}ms - desistindo desta tentativa")
+                lastCaptureOk = false
+                callback(null)
+            }
+        }
+        handler.postDelayed(timeoutRunnable, CAPTURE_TIMEOUT_MS)
+
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
+                    if (responded) return
+                    responded = true
+                    handler.removeCallbacks(timeoutRunnable)
                     try {
                         val hw = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
                         val bmp = hw?.copy(Bitmap.Config.ARGB_8888, false)
                         screenshot.hardwareBuffer.close()
+                        lastCaptureOk = bmp != null
                         callback(bmp)
                     } catch (e: Exception) {
                         Log.w(TAG, "Erro lendo screenshot: ${e.message}")
+                        lastCaptureOk = false
                         callback(null)
                     }
                 }
 
                 override fun onFailure(errorCode: Int) {
+                    if (responded) return
+                    responded = true
+                    handler.removeCallbacks(timeoutRunnable)
+                    Log.w(TAG, "takeScreenshot onFailure codigo=$errorCode")
+                    lastCaptureOk = false
                     callback(null)
                 }
             })
         } catch (e: Exception) {
-            Log.w(TAG, "takeScreenshot falhou: ${e.message}")
-            callback(null)
+            if (!responded) {
+                responded = true
+                handler.removeCallbacks(timeoutRunnable)
+                Log.w(TAG, "takeScreenshot lancou excecao: ${e.message}")
+                lastCaptureOk = false
+                callback(null)
+            }
         }
     }
 
@@ -118,20 +145,33 @@ class ArenaAccessibilityService : AccessibilityService() {
         return (metrics.widthPixels / 2f) to (metrics.heightPixels * 0.55f)
     }
 
-    private fun waitAndTapFixed(texts: List<String>, point: Pair<Float, Float>, deadline: Long, onDone: () -> Unit) {
+    private fun waitAndTapFixed(
+        label: String,
+        texts: List<String>,
+        point: Pair<Float, Float>,
+        deadline: Long,
+        attempt: Int = 1,
+        onDone: () -> Unit
+    ) {
         if (!isRunning) return
         if (System.currentTimeMillis() > deadline) {
+            statusNote = "$label: tempo esgotado, tocando assim mesmo"
             tap(point.first, point.second)
             handler.postDelayed({ onDone() }, SETTLE_MS)
             return
         }
+        statusNote = "$label (tentativa $attempt)"
         findTextBoxes(texts) { boxes ->
             if (!isRunning) return@findTextBoxes
             if (boxes.isNotEmpty()) {
                 tap(point.first, point.second)
                 handler.postDelayed({ onDone() }, SETTLE_MS)
             } else {
-                handler.postDelayed({ waitAndTapFixed(texts, point, deadline, onDone) }, OCR_POLL_INTERVAL_MS)
+                statusNote = "$label (tentativa $attempt, print ${if (lastCaptureOk) "ok, texto nao achado" else "FALHOU"})"
+                handler.postDelayed(
+                    { waitAndTapFixed(label, texts, point, deadline, attempt + 1, onDone) },
+                    OCR_POLL_INTERVAL_MS
+                )
             }
         }
     }
@@ -139,18 +179,12 @@ class ArenaAccessibilityService : AccessibilityService() {
     private fun runMenuSteps(onDone: () -> Unit) {
         if (!isRunning) return
         val deadline = { System.currentTimeMillis() + STEP_TIMEOUT_MS }
-        statusNote = "selecionando campeoes"
-        waitAndTapFixed(listOf("SELECAO"), Coordinates.quickSelect, deadline()) {
-            statusNote = "procurando partida"
-            waitAndTapFixed(listOf("ENCONTRAR"), Coordinates.findMatch, deadline()) {
-                statusNote = "escolhendo luta"
-                waitAndTapFixed(listOf("FACIL"), Coordinates.selectFight, deadline()) {
-                    statusNote = "confirmando luta"
-                    waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueAfterSelect, deadline()) {
-                        statusNote = "aceitando"
-                        waitAndTapFixed(listOf("ACEITAR"), Coordinates.accept, deadline()) {
-                            statusNote = "iniciando luta"
-                            waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueBeforeFight, deadline()) {
+        waitAndTapFixed("selecionando campeoes", listOf("SELECAO"), Coordinates.quickSelect, deadline()) {
+            waitAndTapFixed("procurando partida", listOf("ENCONTRAR"), Coordinates.findMatch, deadline()) {
+                waitAndTapFixed("escolhendo luta", listOf("FACIL"), Coordinates.selectFight, deadline()) {
+                    waitAndTapFixed("confirmando luta", listOf("CONTINUAR"), Coordinates.continueAfterSelect, deadline()) {
+                        waitAndTapFixed("aceitando", listOf("ACEITAR"), Coordinates.accept, deadline()) {
+                            waitAndTapFixed("iniciando luta", listOf("CONTINUAR"), Coordinates.continueBeforeFight, deadline()) {
                                 onDone()
                             }
                         }
@@ -163,9 +197,8 @@ class ArenaAccessibilityService : AccessibilityService() {
     private fun runFight(fightsLeft: Int) {
         if (!isRunning) return
         if (fightsLeft <= 0) {
-            statusNote = "recompensas"
-            waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueAfterLastFight, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
-                waitAndTapFixed(listOf("PROXIMA"), Coordinates.nextSeries, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+            waitAndTapFixed("recompensas", listOf("CONTINUAR"), Coordinates.continueAfterLastFight, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+                waitAndTapFixed("proxima serie", listOf("PROXIMA"), Coordinates.nextSeries, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
                     runMenuSteps { runFight(FIGHTS_PER_SERIES) }
                 }
             }
@@ -195,7 +228,7 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     private fun proceedAfterFight(fightsLeft: Int) {
         fightsCompleted++
-        waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueAfterFight, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+        waitAndTapFixed("continuar pos-luta", listOf("CONTINUAR"), Coordinates.continueAfterFight, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
             runFight(fightsLeft - 1)
         }
     }
@@ -216,6 +249,7 @@ class ArenaAccessibilityService : AccessibilityService() {
 
         const val FIGHTS_PER_SERIES = 3
         const val OCR_POLL_INTERVAL_MS = 900L
+        const val CAPTURE_TIMEOUT_MS = 5000L
         const val SETTLE_MS = 500L
         const val STEP_TIMEOUT_MS = 20000L
         const val FIGHT_TIMEOUT_MS = 90000L
