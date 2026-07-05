@@ -3,7 +3,6 @@ package com.example.mcocarenabot
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -20,10 +19,6 @@ class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var widgetView: View
     private lateinit var params: WindowManager.LayoutParams
-    private lateinit var prefs: SharedPreferences
-
-    private var calibrationStepIndex = -1
-    private var quickMode = false
 
     override fun onCreate() {
         super.onCreate()
@@ -33,7 +28,6 @@ class OverlayService : Service() {
             return
         }
 
-        prefs = getSharedPreferences(ArenaAccessibilityService.PREFS_NAME, MODE_PRIVATE)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         widgetView = LayoutInflater.from(this).inflate(R.layout.overlay_widget, null)
 
@@ -56,7 +50,6 @@ class OverlayService : Service() {
         windowManager.addView(widgetView, params)
         setupDrag()
         setupButtons()
-        setupCalibrationCatcher()
         updateStatusText()
     }
 
@@ -96,12 +89,6 @@ class OverlayService : Service() {
             ArenaAccessibilityService.instance?.stopBot()
             updateStatusText()
         }
-        widgetView.findViewById<View>(R.id.btnCalibrate).setOnClickListener {
-            startCalibration(quick = false)
-        }
-        widgetView.findViewById<View>(R.id.btnQuickCalibrate).setOnClickListener {
-            startCalibration(quick = true)
-        }
         widgetView.findViewById<View>(R.id.btnClose).setOnClickListener {
             ArenaAccessibilityService.instance?.stopBot()
             stopSelf()
@@ -115,64 +102,6 @@ class OverlayService : Service() {
         val note = svc?.getStatusNote() ?: ""
         widgetView.findViewById<TextView>(R.id.statusLabel).text =
             if (running) "Rodando • $fights lutas • $note" else "Parado"
-    }
-
-    private fun startCalibration(quick: Boolean) {
-        quickMode = quick
-        calibrationStepIndex = 0
-        setFullscreenCaptureMode(true)
-        showCalibrationPrompt()
-    }
-
-    private fun showCalibrationPrompt() {
-        if (calibrationStepIndex >= Coordinates.STEPS.size) {
-            calibrationStepIndex = -1
-            setFullscreenCaptureMode(false)
-            updateStatusText()
-            return
-        }
-        val label = Coordinates.STEPS[calibrationStepIndex].second
-        widgetView.findViewById<TextView>(R.id.statusLabel).text =
-            if (quickMode) "Navegue até: $label\n(toque em qualquer lugar pra confirmar)" else label
-    }
-
-    private fun setFullscreenCaptureMode(enable: Boolean) {
-        if (enable) {
-            params.width = WindowManager.LayoutParams.MATCH_PARENT
-            params.height = WindowManager.LayoutParams.MATCH_PARENT
-            params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        } else {
-            params.width = WindowManager.LayoutParams.WRAP_CONTENT
-            params.height = WindowManager.LayoutParams.WRAP_CONTENT
-            params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        }
-        widgetView.findViewById<View>(R.id.calibrationCatcher).visibility =
-            if (enable) View.VISIBLE else View.GONE
-        windowManager.updateViewLayout(widgetView, params)
-    }
-
-    private fun setupCalibrationCatcher() {
-        widgetView.findViewById<View>(R.id.calibrationCatcher).setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_DOWN && calibrationStepIndex in Coordinates.STEPS.indices) {
-                val key = Coordinates.STEPS[calibrationStepIndex].first
-                val existing = Coordinates.load(prefs, key)
-                val x = if (quickMode && existing.isSet()) existing.x else event.rawX
-                val y = if (quickMode && existing.isSet()) existing.y else event.rawY
-
-                widgetView.findViewById<TextView>(R.id.statusLabel).text = "Lendo tela..."
-                val sampled = ArenaAccessibilityService.instance?.samplePixel(x.toInt(), y.toInt()) { color ->
-                    Coordinates.save(prefs, key, CalibPoint(x, y, color ?: 0))
-                    calibrationStepIndex++
-                    showCalibrationPrompt()
-                }
-                if (sampled == null) {
-                    Coordinates.save(prefs, key, CalibPoint(x, y, 0))
-                    calibrationStepIndex++
-                    showCalibrationPrompt()
-                }
-            }
-            true
-        }
     }
 
     override fun onDestroy() {

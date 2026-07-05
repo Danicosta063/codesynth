@@ -23,12 +23,10 @@ class ArenaAccessibilityService : AccessibilityService() {
     private var isRunning = false
     private var fightsCompleted = 0
     private var statusNote = ""
-    private lateinit var prefs: android.content.SharedPreferences
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         Log.i(TAG, "Accessibility service conectado")
         startService(Intent(this, OverlayService::class.java))
     }
@@ -49,7 +47,7 @@ class ArenaAccessibilityService : AccessibilityService() {
         fightsCompleted = 0
         statusNote = ""
         startService(Intent(this, BotForegroundService::class.java))
-        runMenuSteps(0) { runFight(FIGHTS_PER_SERIES) }
+        runMenuSteps { runFight(FIGHTS_PER_SERIES) }
     }
 
     fun stopBot() {
@@ -115,41 +113,50 @@ class ArenaAccessibilityService : AccessibilityService() {
         return nfd.replace(Regex("\\p{M}"), "").uppercase()
     }
 
-    fun samplePixel(x: Int, y: Int, callback: (Int?) -> Unit) {
-        captureBitmap { bitmap ->
-            val color = if (bitmap != null && x in 0 until bitmap.width && y in 0 until bitmap.height) {
-                bitmap.getPixel(x, y)
-            } else null
-            bitmap?.recycle()
-            callback(color)
-        }
-    }
-
     private fun defaultAttackPoint(): Pair<Float, Float> {
-        val calibrated = Coordinates.load(prefs, "attackZone")
-        if (calibrated.isSet()) return calibrated.x to calibrated.y
         val metrics = resources.displayMetrics
         return (metrics.widthPixels / 2f) to (metrics.heightPixels * 0.55f)
     }
 
-    private data class Step(val key: String, val texts: List<String>, val pickBottom: Boolean = false)
-
-    private val menuSteps = listOf(
-        Step("quickSelect", listOf("SELECAO RAPIDA", "SELECAO")),
-        Step("findMatch", listOf("ENCONTRAR PARTIDA", "ENCONTRAR")),
-        Step("selectFight", listOf("FACIL"), pickBottom = true),
-        Step("continueAfterSelect", listOf("CONTINUAR")),
-        Step("accept", listOf("ACEITAR")),
-        Step("continueBeforeFight", listOf("CONTINUAR"))
-    )
-
-    private fun runMenuSteps(index: Int, onDone: () -> Unit) {
+    private fun waitAndTapFixed(texts: List<String>, point: Pair<Float, Float>, deadline: Long, onDone: () -> Unit) {
         if (!isRunning) return
-        if (index >= menuSteps.size) { onDone(); return }
-        val step = menuSteps[index]
-        statusNote = step.key
-        waitAndTapText(step, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
-            runMenuSteps(index + 1, onDone)
+        if (System.currentTimeMillis() > deadline) {
+            tap(point.first, point.second)
+            handler.postDelayed({ onDone() }, SETTLE_MS)
+            return
+        }
+        findTextBoxes(texts) { boxes ->
+            if (!isRunning) return@findTextBoxes
+            if (boxes.isNotEmpty()) {
+                tap(point.first, point.second)
+                handler.postDelayed({ onDone() }, SETTLE_MS)
+            } else {
+                handler.postDelayed({ waitAndTapFixed(texts, point, deadline, onDone) }, OCR_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun runMenuSteps(onDone: () -> Unit) {
+        if (!isRunning) return
+        val deadline = { System.currentTimeMillis() + STEP_TIMEOUT_MS }
+        statusNote = "selecionando campeoes"
+        waitAndTapFixed(listOf("SELECAO"), Coordinates.quickSelect, deadline()) {
+            statusNote = "procurando partida"
+            waitAndTapFixed(listOf("ENCONTRAR"), Coordinates.findMatch, deadline()) {
+                statusNote = "escolhendo luta"
+                waitAndTapFixed(listOf("FACIL"), Coordinates.selectFight, deadline()) {
+                    statusNote = "confirmando luta"
+                    waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueAfterSelect, deadline()) {
+                        statusNote = "aceitando"
+                        waitAndTapFixed(listOf("ACEITAR"), Coordinates.accept, deadline()) {
+                            statusNote = "iniciando luta"
+                            waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueBeforeFight, deadline()) {
+                                onDone()
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -157,8 +164,10 @@ class ArenaAccessibilityService : AccessibilityService() {
         if (!isRunning) return
         if (fightsLeft <= 0) {
             statusNote = "recompensas"
-            waitAndTapText(Step("nextSeries", listOf("PROXIMA SERIE", "PROXIMA")), System.currentTimeMillis() + STEP_TIMEOUT_MS) {
-                runMenuSteps(0) { runFight(FIGHTS_PER_SERIES) }
+            waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueAfterLastFight, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+                waitAndTapFixed(listOf("PROXIMA"), Coordinates.nextSeries, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+                    runMenuSteps { runFight(FIGHTS_PER_SERIES) }
+                }
             }
             return
         }
@@ -186,28 +195,8 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     private fun proceedAfterFight(fightsLeft: Int) {
         fightsCompleted++
-        waitAndTapText(Step("continueAfterFight", listOf("CONTINUAR")), System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+        waitAndTapFixed(listOf("CONTINUAR"), Coordinates.continueAfterFight, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
             runFight(fightsLeft - 1)
-        }
-    }
-
-    private fun waitAndTapText(step: Step, deadline: Long, onDone: () -> Unit) {
-        if (!isRunning) return
-        if (System.currentTimeMillis() > deadline) {
-            val fallback = Coordinates.load(prefs, step.key)
-            if (fallback.isSet()) tap(fallback.x, fallback.y)
-            handler.postDelayed({ onDone() }, SETTLE_MS)
-            return
-        }
-        findTextBoxes(step.texts) { boxes ->
-            if (!isRunning) return@findTextBoxes
-            val target = if (step.pickBottom) boxes.maxByOrNull { it.centerY() } else boxes.firstOrNull()
-            if (target != null) {
-                tap(target.exactCenterX(), target.exactCenterY())
-                handler.postDelayed({ onDone() }, SETTLE_MS)
-            } else {
-                handler.postDelayed({ waitAndTapText(step, deadline, onDone) }, OCR_POLL_INTERVAL_MS)
-            }
         }
     }
 
@@ -224,7 +213,6 @@ class ArenaAccessibilityService : AccessibilityService() {
             private set
 
         private const val TAG = "ArenaBot"
-        const val PREFS_NAME = "mcoc_bot"
 
         const val FIGHTS_PER_SERIES = 3
         const val OCR_POLL_INTERVAL_MS = 900L
