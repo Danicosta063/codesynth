@@ -4,17 +4,22 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Path
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.text.Normalizer
 
 class ArenaAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
+    private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private var isRunning = false
     private var fightsCompleted = 0
     private var statusNote = ""
@@ -33,16 +38,13 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         stopBot()
+        recognizer.close()
         instance = null
         return super.onUnbind(intent)
     }
 
     fun startBot() {
         if (isRunning) return
-        if (!Coordinates.isFullyCalibrated(prefs)) {
-            Log.w(TAG, "Calibre (🎯) antes de iniciar.")
-            return
-        }
         isRunning = true
         fightsCompleted = 0
         statusNote = ""
@@ -60,7 +62,7 @@ class ArenaAccessibilityService : AccessibilityService() {
     fun getFightsCompleted() = fightsCompleted
     fun getStatusNote() = statusNote
 
-    fun samplePixel(x: Int, y: Int, callback: (Int?) -> Unit) {
+    private fun captureBitmap(callback: (Bitmap?) -> Unit) {
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
@@ -68,11 +70,7 @@ class ArenaAccessibilityService : AccessibilityService() {
                         val hw = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
                         val bmp = hw?.copy(Bitmap.Config.ARGB_8888, false)
                         screenshot.hardwareBuffer.close()
-                        val color = if (bmp != null && x in 0 until bmp.width && y in 0 until bmp.height) {
-                            bmp.getPixel(x, y)
-                        } else null
-                        bmp?.recycle()
-                        callback(color)
+                        callback(bmp)
                     } catch (e: Exception) {
                         Log.w(TAG, "Erro lendo screenshot: ${e.message}")
                         callback(null)
@@ -89,24 +87,68 @@ class ArenaAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun colorsClose(a: Int, b: Int): Boolean {
-        if (b == 0) return false
-        return Math.abs(Color.red(a) - Color.red(b)) < COLOR_TOLERANCE &&
-            Math.abs(Color.green(a) - Color.green(b)) < COLOR_TOLERANCE &&
-            Math.abs(Color.blue(a) - Color.blue(b)) < COLOR_TOLERANCE
+    private fun findTextBoxes(targets: List<String>, callback: (List<Rect>) -> Unit) {
+        captureBitmap { bitmap ->
+            if (bitmap == null) {
+                callback(emptyList())
+                return@captureBitmap
+            }
+            val normTargets = targets.map { normalize(it) }
+            val image = InputImage.fromBitmap(bitmap, 0)
+            recognizer.process(image)
+                .addOnSuccessListener { visionText ->
+                    val boxes = visionText.textBlocks
+                        .filter { block -> normTargets.any { normalize(block.text).contains(it) } }
+                        .mapNotNull { it.boundingBox }
+                    bitmap.recycle()
+                    callback(boxes)
+                }
+                .addOnFailureListener {
+                    bitmap.recycle()
+                    callback(emptyList())
+                }
+        }
     }
 
-    private val menuKeys = listOf(
-        "quickSelect", "findMatch", "selectFight",
-        "continueAfterSelect", "accept", "continueBeforeFight"
+    private fun normalize(s: String): String {
+        val nfd = Normalizer.normalize(s, Normalizer.Form.NFD)
+        return nfd.replace(Regex("\\p{M}"), "").uppercase()
+    }
+
+    fun samplePixel(x: Int, y: Int, callback: (Int?) -> Unit) {
+        captureBitmap { bitmap ->
+            val color = if (bitmap != null && x in 0 until bitmap.width && y in 0 until bitmap.height) {
+                bitmap.getPixel(x, y)
+            } else null
+            bitmap?.recycle()
+            callback(color)
+        }
+    }
+
+    private fun defaultAttackPoint(): Pair<Float, Float> {
+        val calibrated = Coordinates.load(prefs, "attackZone")
+        if (calibrated.isSet()) return calibrated.x to calibrated.y
+        val metrics = resources.displayMetrics
+        return (metrics.widthPixels / 2f) to (metrics.heightPixels * 0.55f)
+    }
+
+    private data class Step(val key: String, val texts: List<String>, val pickBottom: Boolean = false)
+
+    private val menuSteps = listOf(
+        Step("quickSelect", listOf("SELECAO RAPIDA", "SELECAO")),
+        Step("findMatch", listOf("ENCONTRAR PARTIDA", "ENCONTRAR")),
+        Step("selectFight", listOf("FACIL"), pickBottom = true),
+        Step("continueAfterSelect", listOf("CONTINUAR")),
+        Step("accept", listOf("ACEITAR")),
+        Step("continueBeforeFight", listOf("CONTINUAR"))
     )
 
     private fun runMenuSteps(index: Int, onDone: () -> Unit) {
         if (!isRunning) return
-        if (index >= menuKeys.size) { onDone(); return }
-        val key = menuKeys[index]
-        statusNote = key
-        waitAndTap(key, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+        if (index >= menuSteps.size) { onDone(); return }
+        val step = menuSteps[index]
+        statusNote = step.key
+        waitAndTapText(step, System.currentTimeMillis() + STEP_TIMEOUT_MS) {
             runMenuSteps(index + 1, onDone)
         }
     }
@@ -115,7 +157,7 @@ class ArenaAccessibilityService : AccessibilityService() {
         if (!isRunning) return
         if (fightsLeft <= 0) {
             statusNote = "recompensas"
-            waitAndTap("nextSeries", System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+            waitAndTapText(Step("nextSeries", listOf("PROXIMA SERIE", "PROXIMA")), System.currentTimeMillis() + STEP_TIMEOUT_MS) {
                 runMenuSteps(0) { runFight(FIGHTS_PER_SERIES) }
             }
             return
@@ -126,20 +168,17 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     private fun fightTick(deadline: Long, fightsLeft: Int) {
         if (!isRunning) return
-        val cf = Coordinates.load(prefs, "continueAfterFight")
-        val az = Coordinates.load(prefs, "attackZone")
-
         if (System.currentTimeMillis() > deadline) {
             proceedAfterFight(fightsLeft)
             return
         }
-
-        samplePixel(cf.x.toInt(), cf.y.toInt()) { color ->
-            if (!isRunning) return@samplePixel
-            if (color != null && colorsClose(color, cf.color)) {
+        findTextBoxes(listOf("CONTINUAR")) { boxes ->
+            if (!isRunning) return@findTextBoxes
+            if (boxes.isNotEmpty()) {
                 proceedAfterFight(fightsLeft)
             } else {
-                tap(az.x, az.y)
+                val (ax, ay) = defaultAttackPoint()
+                tap(ax, ay)
                 handler.postDelayed({ fightTick(deadline, fightsLeft) }, ATTACK_INTERVAL_MS)
             }
         }
@@ -147,31 +186,27 @@ class ArenaAccessibilityService : AccessibilityService() {
 
     private fun proceedAfterFight(fightsLeft: Int) {
         fightsCompleted++
-        waitAndTap("continueAfterFight", System.currentTimeMillis() + STEP_TIMEOUT_MS) {
+        waitAndTapText(Step("continueAfterFight", listOf("CONTINUAR")), System.currentTimeMillis() + STEP_TIMEOUT_MS) {
             runFight(fightsLeft - 1)
         }
     }
 
-    private fun waitAndTap(key: String, deadline: Long, onDone: () -> Unit) {
+    private fun waitAndTapText(step: Step, deadline: Long, onDone: () -> Unit) {
         if (!isRunning) return
-        val point = Coordinates.load(prefs, key)
-        if (!point.isSet()) {
-            Log.w(TAG, "Ponto '$key' nao calibrado.")
-            stopBot()
-            return
-        }
         if (System.currentTimeMillis() > deadline) {
-            tap(point.x, point.y)
+            val fallback = Coordinates.load(prefs, step.key)
+            if (fallback.isSet()) tap(fallback.x, fallback.y)
             handler.postDelayed({ onDone() }, SETTLE_MS)
             return
         }
-        samplePixel(point.x.toInt(), point.y.toInt()) { color ->
-            if (!isRunning) return@samplePixel
-            if (color != null && colorsClose(color, point.color)) {
-                tap(point.x, point.y)
+        findTextBoxes(step.texts) { boxes ->
+            if (!isRunning) return@findTextBoxes
+            val target = if (step.pickBottom) boxes.maxByOrNull { it.centerY() } else boxes.firstOrNull()
+            if (target != null) {
+                tap(target.exactCenterX(), target.exactCenterY())
                 handler.postDelayed({ onDone() }, SETTLE_MS)
             } else {
-                handler.postDelayed({ waitAndTap(key, deadline, onDone) }, POLL_INTERVAL_MS)
+                handler.postDelayed({ waitAndTapText(step, deadline, onDone) }, OCR_POLL_INTERVAL_MS)
             }
         }
     }
@@ -192,11 +227,10 @@ class ArenaAccessibilityService : AccessibilityService() {
         const val PREFS_NAME = "mcoc_bot"
 
         const val FIGHTS_PER_SERIES = 3
-        const val COLOR_TOLERANCE = 30
-        const val POLL_INTERVAL_MS = 700L
+        const val OCR_POLL_INTERVAL_MS = 900L
         const val SETTLE_MS = 500L
         const val STEP_TIMEOUT_MS = 20000L
         const val FIGHT_TIMEOUT_MS = 90000L
-        const val ATTACK_INTERVAL_MS = 350L
+        const val ATTACK_INTERVAL_MS = 450L
     }
 }
