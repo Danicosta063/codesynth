@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -19,6 +21,14 @@ class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var widgetView: View
     private lateinit var params: WindowManager.LayoutParams
+
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val refreshRunnable = object : Runnable {
+        override fun run() {
+            updateStatusText()
+            refreshHandler.postDelayed(this, 500L)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -50,7 +60,7 @@ class OverlayService : Service() {
         windowManager.addView(widgetView, params)
         setupDrag()
         setupButtons()
-        updateStatusText()
+        refreshHandler.post(refreshRunnable)
     }
 
     private fun setupDrag() {
@@ -106,6 +116,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        refreshHandler.removeCallbacks(refreshRunnable)
         if (::widgetView.isInitialized) windowManager.removeView(widgetView)
     }
 
