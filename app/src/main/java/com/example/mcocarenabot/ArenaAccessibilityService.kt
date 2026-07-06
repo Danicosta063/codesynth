@@ -251,11 +251,11 @@ class ArenaAccessibilityService : AccessibilityService() {
         private const val TAG = "ArenaBot"
 
         const val FIGHTS_PER_SERIES = 3
-        const val OCR_POLL_INTERVAL_MS = 900L
+        const val OCR_POLL_INTERVAL_MS = 3000L
         const val CAPTURE_TIMEOUT_MS = 5000L
         const val SETTLE_MS = 500L
-        const val STEP_TIMEOUT_MS = 20000L
-        const val FIGHT_TIMEOUT_MS = 90000L
-        const val ATTACK_INTERVAL_MS = 450L
+        const val STEP_TIMEOUT_MS = 30000L
+        const val FIGHT_TIMEOUT_MS = 120000L
+        const val ATTACK_INTERVAL_MS = 3000L
     }
 }
