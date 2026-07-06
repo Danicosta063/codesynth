@@ -24,6 +24,7 @@ class ArenaAccessibilityService : AccessibilityService() {
     private var fightsCompleted = 0
     private var statusNote = ""
     private var lastCaptureOk = true
+    private var lastErrorCode: Int? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -66,6 +67,7 @@ class ArenaAccessibilityService : AccessibilityService() {
         val timeoutRunnable = Runnable {
             if (!responded) {
                 responded = true
+                lastErrorCode = -1
                 Log.w(TAG, "takeScreenshot sem resposta em ${CAPTURE_TIMEOUT_MS}ms - desistindo desta tentativa")
                 lastCaptureOk = false
                 callback(null)
@@ -96,6 +98,7 @@ class ArenaAccessibilityService : AccessibilityService() {
                     if (responded) return
                     responded = true
                     handler.removeCallbacks(timeoutRunnable)
+                    lastErrorCode = errorCode
                     Log.w(TAG, "takeScreenshot onFailure codigo=$errorCode")
                     lastCaptureOk = false
                     callback(null)
@@ -167,7 +170,7 @@ class ArenaAccessibilityService : AccessibilityService() {
                 tap(point.first, point.second)
                 handler.postDelayed({ onDone() }, SETTLE_MS)
             } else {
-                statusNote = "$label (tentativa $attempt, print ${if (lastCaptureOk) "ok, texto nao achado" else "FALHOU"})"
+                statusNote = "$label (tentativa $attempt, print ${if (lastCaptureOk) "ok, texto nao achado" else "FALHOU cod=$lastErrorCode"})"
                 handler.postDelayed(
                     { waitAndTapFixed(label, texts, point, deadline, attempt + 1, onDone) },
                     OCR_POLL_INTERVAL_MS
