@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "companheirosteve",
+  "version": "${version}",
+  "name": "Companheiro Steve",
+  "description": "Um companheiro autonomo que joga Minecraft no modo sobrevivencia.",
+  "authors": [
+    "Danicosta063"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "br.com.companheirosteve.CompanheiroSteve"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.2",
+    "minecraft": "1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
