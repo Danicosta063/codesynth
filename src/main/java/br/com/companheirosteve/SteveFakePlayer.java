@@ -4,8 +4,8 @@ import com.mojang.authlib.GameProfile;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.network.SyncedClientOptions;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
 
 public class SteveFakePlayer extends ServerPlayerEntity {
 
