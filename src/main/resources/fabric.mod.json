@@ -11,6 +11,9 @@
   "entrypoints": {
     "main": [
       "br.com.companheirosteve.CompanheiroSteve"
+    ],
+    "client": [
+      "br.com.companheirosteve.CompanheiroSteveClient"
     ]
   },
   "depends": {
