@@ -1,9 +1,16 @@
 package br.com.companheirosteve;
 
 import com.mojang.brigadier.CommandDispatcher;
+
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.passive.VillagerEntity;
+
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
+
 import net.minecraft.text.Text;
 
 import static net.minecraft.server.command.CommandManager.literal;
@@ -15,7 +22,7 @@ public class CompanheiroSteve implements ModInitializer {
     @Override
     public void onInitialize() {
 
-        System.out.println("[Companheiro Steve] Inicializado!");
+        System.out.println("[Companheiro Steve] Mod inicializado!");
 
         CommandRegistrationCallback.EVENT.register(
             (dispatcher, registryAccess, environment) -> {
@@ -35,27 +42,43 @@ public class CompanheiroSteve implements ModInitializer {
 
                     ServerCommandSource source = context.getSource();
 
-                    if (source.getPlayer() == null) {
+                    ServerPlayerEntity jogador;
+
+                    try {
+                        jogador = source.getPlayerOrThrow();
+                    } catch (Exception e) {
                         source.sendError(Text.literal(
-                            "Este comando precisa ser usado por um jogador."
+                            "Este comando so pode ser usado por jogadores."
                         ));
                         return 0;
                     }
 
-                    String comando =
-                        "summon minecraft:villager ~ ~ ~ " +
-                        "{CustomName:'{\"text\":\"Companheiro Steve\"}'," +
-                        "CustomNameVisible:1b," +
-                        "PersistenceRequired:1b," +
-                        "NoAI:1b}";
+                    VillagerEntity npc = new VillagerEntity(
+                        EntityType.VILLAGER,
+                        jogador.getEntityWorld()
+                    );
 
-                    source.getServer()
-                        .getCommandManager()
-                        .executeWithPrefix(source, comando);
+                    npc.refreshPositionAndAngles(
+                        jogador.getX() + 2,
+                        jogador.getY(),
+                        jogador.getZ() + 2,
+                        0,
+                        0
+                    );
+
+                    npc.setCustomName(
+                        Text.literal("Companheiro Steve")
+                    );
+
+                    npc.setCustomNameVisible(true);
+
+                    npc.setPersistent();
+
+                    jogador.getEntityWorld().spawnEntity(npc);
 
                     source.sendFeedback(
                         () -> Text.literal(
-                            "Protótipo do companheiro criado!"
+                            "Companheiro Steve criado com sucesso!"
                         ),
                         false
                     );
@@ -67,7 +90,7 @@ public class CompanheiroSteve implements ModInitializer {
 
                     context.getSource().sendFeedback(
                         () -> Text.literal(
-                            "Sistema de seguir ainda em desenvolvimento."
+                            "Sistema de seguir em desenvolvimento."
                         ),
                         false
                     );
@@ -79,7 +102,7 @@ public class CompanheiroSteve implements ModInitializer {
 
                     context.getSource().sendFeedback(
                         () -> Text.literal(
-                            "Sistema de parar ainda em desenvolvimento."
+                            "Sistema de parar em desenvolvimento."
                         ),
                         false
                     );
