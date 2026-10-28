@@ -21,6 +21,7 @@ public class CompanheiroSteve implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        SteveEntities.registrar();
 
         System.out.println("[Companheiro Steve] Mod inicializado!");
 
