@@ -15,9 +15,7 @@ public class CompanheiroSteve implements ModInitializer {
     @Override
     public void onInitialize() {
 
-        System.out.println(
-            "[Companheiro Steve] Mod inicializado!"
-        );
+        System.out.println("[Companheiro Steve] Inicializado!");
 
         CommandRegistrationCallback.EVENT.register(
             (dispatcher, registryAccess, environment) -> {
@@ -33,50 +31,61 @@ public class CompanheiroSteve implements ModInitializer {
         dispatcher.register(
             literal("steve")
 
-                .then(
-                    literal("criar")
-                        .executes(context -> {
+                .then(literal("criar").executes(context -> {
 
-                            context.getSource().sendFeedback(
-                                () -> Text.literal(
-                                    "Companheiro Steve: comando criar recebido!"
-                                ),
-                                false
-                            );
+                    ServerCommandSource source = context.getSource();
 
-                            return 1;
-                        })
-                )
+                    if (source.getPlayer() == null) {
+                        source.sendError(Text.literal(
+                            "Este comando precisa ser usado por um jogador."
+                        ));
+                        return 0;
+                    }
 
-                .then(
-                    literal("seguir")
-                        .executes(context -> {
+                    String comando =
+                        "summon minecraft:villager ~ ~ ~ " +
+                        "{CustomName:'{\"text\":\"Companheiro Steve\"}'," +
+                        "CustomNameVisible:1b," +
+                        "PersistenceRequired:1b," +
+                        "NoAI:1b}";
 
-                            context.getSource().sendFeedback(
-                                () -> Text.literal(
-                                    "Companheiro Steve: comando seguir recebido!"
-                                ),
-                                false
-                            );
+                    source.getServer()
+                        .getCommandManager()
+                        .executeWithPrefix(source, comando);
 
-                            return 1;
-                        })
-                )
+                    source.sendFeedback(
+                        () -> Text.literal(
+                            "Protótipo do companheiro criado!"
+                        ),
+                        false
+                    );
 
-                .then(
-                    literal("parar")
-                        .executes(context -> {
+                    return 1;
+                }))
 
-                            context.getSource().sendFeedback(
-                                () -> Text.literal(
-                                    "Companheiro Steve: comando parar recebido!"
-                                ),
-                                false
-                            );
+                .then(literal("seguir").executes(context -> {
 
-                            return 1;
-                        })
-                )
+                    context.getSource().sendFeedback(
+                        () -> Text.literal(
+                            "Sistema de seguir ainda em desenvolvimento."
+                        ),
+                        false
+                    );
+
+                    return 1;
+                }))
+
+                .then(literal("parar").executes(context -> {
+
+                    context.getSource().sendFeedback(
+                        () -> Text.literal(
+                            "Sistema de parar ainda em desenvolvimento."
+                        ),
+                        false
+                    );
+
+                    return 1;
+                }))
         );
     }
 }
