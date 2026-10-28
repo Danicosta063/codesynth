@@ -5,12 +5,8 @@ import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.passive.VillagerEntity;
-
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
-
 import net.minecraft.text.Text;
 
 import static net.minecraft.server.command.CommandManager.literal;
@@ -21,9 +17,12 @@ public class CompanheiroSteve implements ModInitializer {
 
     @Override
     public void onInitialize() {
+
         SteveEntities.registrar();
 
-        System.out.println("[Companheiro Steve] Mod inicializado!");
+        System.out.println(
+            "[Companheiro Steve] Mod inicializado!"
+        );
 
         CommandRegistrationCallback.EVENT.register(
             (dispatcher, registryAccess, environment) -> {
@@ -54,16 +53,23 @@ public class CompanheiroSteve implements ModInitializer {
                         return 0;
                     }
 
-                    VillagerEntity npc = new VillagerEntity(
-                        EntityType.VILLAGER,
-                        jogador.getEntityWorld()
+                    SteveEntity npc = SteveEntities.STEVE.create(
+                        jogador.getEntityWorld(),
+                        net.minecraft.entity.SpawnReason.COMMAND
                     );
+
+                    if (npc == null) {
+                        source.sendError(Text.literal(
+                            "Nao foi possivel criar o Steve."
+                        ));
+                        return 0;
+                    }
 
                     npc.refreshPositionAndAngles(
                         jogador.getX() + 2,
                         jogador.getY(),
                         jogador.getZ() + 2,
-                        0,
+                        jogador.getYaw(),
                         0
                     );
 
@@ -72,14 +78,21 @@ public class CompanheiroSteve implements ModInitializer {
                     );
 
                     npc.setCustomNameVisible(true);
-
                     npc.setPersistent();
 
-                    jogador.getEntityWorld().spawnEntity(npc);
+                    boolean criado =
+                        jogador.getEntityWorld().spawnEntity(npc);
+
+                    if (!criado) {
+                        source.sendError(Text.literal(
+                            "Falha ao adicionar Steve ao mundo."
+                        ));
+                        return 0;
+                    }
 
                     source.sendFeedback(
                         () -> Text.literal(
-                            "Companheiro Steve criado com sucesso!"
+                            "Companheiro Steve criado!"
                         ),
                         false
                     );
