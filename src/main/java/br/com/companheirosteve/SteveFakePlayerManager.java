@@ -2,6 +2,8 @@ package br.com.companheirosteve;
 
 import com.mojang.authlib.GameProfile;
 
+import net.fabricmc.fabric.api.entity.FakePlayer;
+
 import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
@@ -21,18 +23,13 @@ public class SteveFakePlayerManager {
         );
 
     public static GameProfile criarPerfil() {
-
-        return new GameProfile(
-            UUID_STEVE,
-            NOME
-        );
+        return new GameProfile(UUID_STEVE, NOME);
     }
 
     public static SteveFakePlayer criarJogador(
         MinecraftServer servidor,
         ServerWorld mundo
     ) {
-
         GameProfile perfil = criarPerfil();
 
         SyncedClientOptions opcoes =
@@ -43,6 +40,15 @@ public class SteveFakePlayerManager {
             mundo,
             perfil,
             opcoes
+        );
+    }
+
+    public static FakePlayer obterFakePlayerFabric(
+        ServerWorld mundo
+    ) {
+        return FakePlayer.get(
+            mundo,
+            criarPerfil()
         );
     }
 }
