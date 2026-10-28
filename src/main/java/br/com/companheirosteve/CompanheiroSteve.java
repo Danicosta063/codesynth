@@ -9,6 +9,11 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 
+import net.minecraft.util.math.Box;
+
+import java.util.Comparator;
+import java.util.List;
+
 import static net.minecraft.server.command.CommandManager.literal;
 
 public class CompanheiroSteve implements ModInitializer {
@@ -20,15 +25,33 @@ public class CompanheiroSteve implements ModInitializer {
 
         SteveEntities.registrar();
 
-        System.out.println(
-            "[Companheiro Steve] Mod inicializado!"
-        );
-
         CommandRegistrationCallback.EVENT.register(
             (dispatcher, registryAccess, environment) -> {
                 registrarComandos(dispatcher);
             }
         );
+
+        System.out.println(
+            "[Companheiro Steve] Mod inicializado!"
+        );
+    }
+
+    private SteveEntity encontrarSteve(ServerPlayerEntity jogador) {
+
+        Box area = jogador.getBoundingBox().expand(64.0);
+
+        List<SteveEntity> steves =
+            jogador.getEntityWorld().getEntitiesByClass(
+                SteveEntity.class,
+                area,
+                npc -> npc.isAlive()
+            );
+
+        return steves.stream()
+            .min(Comparator.comparingDouble(
+                npc -> npc.squaredDistanceTo(jogador)
+            ))
+            .orElse(null);
     }
 
     private void registrarComandos(
@@ -41,14 +64,22 @@ public class CompanheiroSteve implements ModInitializer {
                 .then(literal("criar").executes(context -> {
 
                     ServerCommandSource source = context.getSource();
-
                     ServerPlayerEntity jogador;
 
                     try {
                         jogador = source.getPlayerOrThrow();
                     } catch (Exception e) {
                         source.sendError(Text.literal(
-                            "Este comando so pode ser usado por jogadores."
+                            "Este comando so funciona para jogadores."
+                        ));
+                        return 0;
+                    }
+
+                    SteveEntity existente = encontrarSteve(jogador);
+
+                    if (existente != null) {
+                        source.sendError(Text.literal(
+                            "Ja existe um Steve proximo!"
                         ));
                         return 0;
                     }
@@ -60,7 +91,7 @@ public class CompanheiroSteve implements ModInitializer {
 
                     if (npc == null) {
                         source.sendError(Text.literal(
-                            "Nao foi possivel criar o Steve."
+                            "Nao foi possivel criar Steve."
                         ));
                         return 0;
                     }
@@ -80,12 +111,11 @@ public class CompanheiroSteve implements ModInitializer {
                     npc.setCustomNameVisible(true);
                     npc.setPersistent();
 
-                    boolean criado =
-                        jogador.getEntityWorld().spawnEntity(npc);
+                    npc.definirDono(jogador);
 
-                    if (!criado) {
+                    if (!jogador.getEntityWorld().spawnEntity(npc)) {
                         source.sendError(Text.literal(
-                            "Falha ao adicionar Steve ao mundo."
+                            "Falha ao criar Steve no mundo."
                         ));
                         return 0;
                     }
@@ -102,9 +132,30 @@ public class CompanheiroSteve implements ModInitializer {
 
                 .then(literal("seguir").executes(context -> {
 
-                    context.getSource().sendFeedback(
+                    ServerCommandSource source = context.getSource();
+                    ServerPlayerEntity jogador;
+
+                    try {
+                        jogador = source.getPlayerOrThrow();
+                    } catch (Exception e) {
+                        return 0;
+                    }
+
+                    SteveEntity npc = encontrarSteve(jogador);
+
+                    if (npc == null) {
+                        source.sendError(Text.literal(
+                            "Nenhum Steve encontrado em 64 blocos."
+                        ));
+                        return 0;
+                    }
+
+                    npc.definirDono(jogador);
+                    npc.seguir();
+
+                    source.sendFeedback(
                         () -> Text.literal(
-                            "Sistema de seguir em desenvolvimento."
+                            "Steve agora esta seguindo voce!"
                         ),
                         false
                     );
@@ -114,9 +165,29 @@ public class CompanheiroSteve implements ModInitializer {
 
                 .then(literal("parar").executes(context -> {
 
-                    context.getSource().sendFeedback(
+                    ServerCommandSource source = context.getSource();
+                    ServerPlayerEntity jogador;
+
+                    try {
+                        jogador = source.getPlayerOrThrow();
+                    } catch (Exception e) {
+                        return 0;
+                    }
+
+                    SteveEntity npc = encontrarSteve(jogador);
+
+                    if (npc == null) {
+                        source.sendError(Text.literal(
+                            "Nenhum Steve encontrado em 64 blocos."
+                        ));
+                        return 0;
+                    }
+
+                    npc.parar();
+
+                    source.sendFeedback(
                         () -> Text.literal(
-                            "Sistema de parar em desenvolvimento."
+                            "Steve parou de seguir!"
                         ),
                         false
                     );
