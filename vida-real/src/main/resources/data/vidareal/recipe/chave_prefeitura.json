@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " I ",
+    " GI",
+    " I "
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:gold_ingot"
+  },
+  "result": {
+    "id": "vidareal:chave_prefeitura",
+    "count": 1
+  }
+}
