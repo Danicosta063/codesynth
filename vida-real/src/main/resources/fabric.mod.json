@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "vidareal",
+  "version": "${version}",
+  "name": "Vida Real",
+  "description": "Um mundo vivo com cidades, NPCs, economia e sociedade.",
+  "authors": [
+    "Danicosta063"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "br.com.vidareal.VidaReal"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "1.21.11",
+    "java": ">=21"
+  }
+}
