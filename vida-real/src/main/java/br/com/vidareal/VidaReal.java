@@ -3,8 +3,9 @@ package br.com.vidareal;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 
 public class VidaReal implements ModInitializer {
@@ -16,12 +17,12 @@ public class VidaReal implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
+        Identifier id = Identifier.fromNamespaceAndPath(
             MOD_ID, "chave_prefeitura"
         );
 
         ResourceKey<Item> key = ResourceKey.create(
-            net.minecraft.core.registries.Registries.ITEM, id
+            Registries.ITEM, id
         );
 
         CHAVE_PREFEITURA = Registry.register(
