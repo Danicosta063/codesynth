@@ -1,8 +1,11 @@
 
 package com.danicosta.noobprohackergod;
 
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Random;
+import java.util.Set;
 
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -16,22 +19,13 @@ public final class GeradorProjetos {
             TemaConstrucao tema,
             PersonagemTipo personagem
     ) {
-        Objects.requireNonNull(
-                tema,
-                "O tema nao pode ser nulo"
-        );
-
-        Objects.requireNonNull(
-                personagem,
-                "O personagem nao pode ser nulo"
-        );
+        Objects.requireNonNull(tema);
+        Objects.requireNonNull(personagem);
 
         ProjetoConstrucao projeto = new ProjetoConstrucao(
                 tema.getDescricaoCompleta(),
                 personagem
         );
-
-        Random aleatorio = new Random();
 
         int nivel = personagem.getNivelConstrucao();
 
@@ -39,67 +33,28 @@ public final class GeradorProjetos {
         int profundidade = 7 + nivel * 4;
         int altura = 4 + nivel * 2;
 
+        long semente = Objects.hash(
+                tema.getIdentificador(),
+                personagem.name()
+        );
+
+        Random aleatorio = new Random(semente);
+
+        Set<String> posicoes = new HashSet<>();
+
         Block parede = escolherParede(tema, nivel);
         Block piso = escolherPiso(tema, nivel);
         Block teto = escolherTeto(tema, nivel);
 
-        gerarPiso(
-                projeto,
-                largura,
-                profundidade,
-                piso
-        );
-
-        gerarParedes(
-                projeto,
-                largura,
-                profundidade,
-                altura,
-                parede
-        );
-
-        gerarTeto(
-                projeto,
-                largura,
-                profundidade,
-                altura,
-                teto
-        );
-
-        adicionarDetalhes(
-                projeto,
-                largura,
-                profundidade,
-                altura,
-                nivel,
-                aleatorio
-        );
-
-        return projeto;
-    }
-
-    private static void gerarPiso(
-            ProjetoConstrucao projeto,
-            int largura,
-            int profundidade,
-            Block bloco
-    ) {
         for (int x = 0; x < largura; x++) {
             for (int z = 0; z < profundidade; z++) {
-                projeto.adicionarBloco(
-                        new BlocoConstrucao(x, 0, z, bloco)
+                adicionar(
+                        projeto, posicoes,
+                        x, 0, z, piso
                 );
             }
         }
-    }
 
-    private static void gerarParedes(
-            ProjetoConstrucao projeto,
-            int largura,
-            int profundidade,
-            int altura,
-            Block bloco
-    ) {
         for (int y = 1; y <= altura; y++) {
             for (int x = 0; x < largura; x++) {
                 for (int z = 0; z < profundidade; z++) {
@@ -116,40 +71,43 @@ public final class GeradorProjetos {
                             && y <= 2;
 
                     if (borda && !entrada) {
-                        projeto.adicionarBloco(
-                                new BlocoConstrucao(
-                                        x, y, z, bloco
-                                )
+                        adicionar(
+                                projeto, posicoes,
+                                x, y, z, parede
                         );
                     }
                 }
             }
         }
-    }
-
-    private static void gerarTeto(
-            ProjetoConstrucao projeto,
-            int largura,
-            int profundidade,
-            int altura,
-            Block bloco
-    ) {
-        int y = altura + 1;
 
         for (int x = 0; x < largura; x++) {
             for (int z = 0; z < profundidade; z++) {
-                projeto.adicionarBloco(
-                        new BlocoConstrucao(x, y, z, bloco)
+                adicionar(
+                        projeto, posicoes,
+                        x, altura + 1, z, teto
                 );
             }
         }
+
+        adicionarDetalhes(
+                projeto,
+                posicoes,
+                largura,
+                profundidade,
+                nivel,
+                aleatorio
+        );
+
+        OrganizadorBlocos.organizar(projeto);
+
+        return projeto;
     }
 
     private static void adicionarDetalhes(
             ProjetoConstrucao projeto,
+            Set<String> posicoes,
             int largura,
             int profundidade,
-            int altura,
             int nivel,
             Random aleatorio
     ) {
@@ -160,28 +118,54 @@ public final class GeradorProjetos {
             default -> Blocks.GOLD_BLOCK;
         };
 
-        for (int i = 0; i < nivel * 4; i++) {
+        int quantidade = nivel * 4;
+        int tentativas = 0;
+        int adicionados = 0;
+
+        while (adicionados < quantidade
+                && tentativas < quantidade * 20) {
+
+            tentativas++;
+
             int x = 1 + aleatorio.nextInt(largura - 2);
             int z = 1 + aleatorio.nextInt(profundidade - 2);
 
-            projeto.adicionarBloco(
-                    new BlocoConstrucao(
-                            x,
-                            1,
-                            z,
-                            detalhe
-                    )
-            );
+            if (adicionar(
+                    projeto, posicoes,
+                    x, 1, z, detalhe
+            )) {
+                adicionados++;
+            }
         }
+    }
+
+    private static boolean adicionar(
+            ProjetoConstrucao projeto,
+            Set<String> posicoes,
+            int x,
+            int y,
+            int z,
+            Block bloco
+    ) {
+        String chave = x + ":" + y + ":" + z;
+
+        if (!posicoes.add(chave)) {
+            return false;
+        }
+
+        projeto.adicionarBloco(
+                new BlocoConstrucao(x, y, z, bloco)
+        );
+
+        return true;
     }
 
     private static Block escolherParede(
             TemaConstrucao tema,
             int nivel
     ) {
-        String estilo = tema.getEstilo().toLowerCase(
-                java.util.Locale.ROOT
-        );
+        String estilo = tema.getEstilo()
+                .toLowerCase(Locale.ROOT);
 
         if (estilo.contains("medieval")) {
             return Blocks.STONE_BRICKS;
@@ -189,6 +173,14 @@ public final class GeradorProjetos {
 
         if (estilo.contains("futurista")) {
             return Blocks.QUARTZ_BLOCK;
+        }
+
+        if (estilo.contains("rustico")) {
+            return Blocks.SPRUCE_PLANKS;
+        }
+
+        if (estilo.contains("industrial")) {
+            return Blocks.IRON_BLOCK;
         }
 
         return switch (nivel) {
