@@ -65,11 +65,8 @@ public final class FabricaSessoesConstrucao {
                         validador
                 );
 
-        ExecutorConstrucao executor =
-                new ExecutorConstrucao(projeto);
-
         return new SessaoConstrucao(
-                executor,
+                projeto,
                 colocador
         );
     }
