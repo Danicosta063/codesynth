@@ -37,6 +37,6 @@ jobs:
       - name: Publicar JAR
         uses: actions/upload-artifact@v4
         with:
-          name: VidaReal-0.0.1
+          name: VidaReal-0.0.2
           path: vida-real/build/libs/*.jar
           if-no-files-found: error
