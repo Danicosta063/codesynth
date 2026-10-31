@@ -2,13 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    " I ",
-    " GI",
-    " I "
+    "P  ",
+    "PS ",
+    "P  "
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "G": "minecraft:gold_ingot"
+    "P": "#minecraft:planks",
+    "S": "minecraft:stick"
   },
   "result": {
     "id": "vidareal:chave_prefeitura",
