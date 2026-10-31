@@ -1,0 +1,23 @@
+
+{
+  "schemaVersion": 1,
+  "id": "noobprohackergod",
+  "version": "${version}",
+  "name": "Noob Pro Hacker God",
+  "description": "Mod de competicoes de construcao entre Noob, Pro, Hacker e God.",
+  "authors": [
+    "DaniCosta"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.danicosta.noobprohackergod.NoobProHackerGod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
