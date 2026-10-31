@@ -19,16 +19,18 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Configurar Gradle
+      - name: Instalar Gradle 9.2.1
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.2.1'
 
-      - name: Permitir execucao do Gradle
-        run: chmod +x gradlew
+      - name: Mostrar versao do Gradle
+        run: gradle --version
 
       - name: Compilar mod
-        run: ./gradlew build --stacktrace
+        run: gradle build --stacktrace --no-daemon
 
-      - name: Salvar arquivos compilados
+      - name: Salvar JAR compilado
         if: success()
         uses: actions/upload-artifact@v4
         with:
