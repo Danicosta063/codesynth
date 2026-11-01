@@ -22,17 +22,36 @@ public final class ReceptorInicioCompeticao {
                 PacoteInicioCompeticao.TYPE,
                 (pacote, contexto) -> {
 
+                    NoobProHackerGod.LOGGER.info(
+                            "[NPHG] Pacote recebido pelo servidor."
+                    );
+
                     contexto.server().execute(() -> {
-                        processar(
-                                pacote,
-                                contexto.player()
-                        );
+                        try {
+                            processar(
+                                    pacote,
+                                    contexto.player()
+                            );
+                        } catch (Exception erro) {
+
+                            NoobProHackerGod.LOGGER.error(
+                                    "[NPHG] Erro ao processar competicao.",
+                                    erro
+                            );
+
+                            contexto.player().sendSystemMessage(
+                                    Component.literal(
+                                            "[NPHG] ERRO no servidor: "
+                                            + erro.getClass().getSimpleName()
+                                    )
+                            );
+                        }
                     });
                 }
         );
 
         NoobProHackerGod.LOGGER.info(
-                "Receptor de inicio da competicao registrado."
+                "[NPHG] Receptor registrado."
         );
     }
 
@@ -44,6 +63,12 @@ public final class ReceptorInicioCompeticao {
             return;
         }
 
+        jogador.sendSystemMessage(
+                Component.literal(
+                        "[NPHG] ETAPA 1: Servidor recebeu o pedido."
+                )
+        );
+
         DadosInicioCompeticao dados;
 
         try {
@@ -51,21 +76,34 @@ public final class ReceptorInicioCompeticao {
         } catch (IllegalArgumentException erro) {
             jogador.sendSystemMessage(
                     Component.literal(
-                            "Configuracao de competicao invalida."
+                            "[NPHG] ERRO: Configuracao invalida."
                     )
             );
             return;
         }
 
+        jogador.sendSystemMessage(
+                Component.literal(
+                        "[NPHG] ETAPA 2: Dados validados."
+                )
+        );
+
         if (!jogador.permissions()
                 .hasPermission(Permissions.COMMANDS_MODERATOR)) {
+
             jogador.sendSystemMessage(
                     Component.literal(
-                            "Voce precisa de permissao de operador."
+                            "[NPHG] ERRO: Sem permissao de operador."
                     )
             );
             return;
         }
+
+        jogador.sendSystemMessage(
+                Component.literal(
+                        "[NPHG] ETAPA 3: Permissao confirmada."
+                )
+        );
 
         ServerLevel mundo = jogador.level();
 
@@ -79,17 +117,29 @@ public final class ReceptorInicioCompeticao {
             selecao.selecionar(personagem);
         }
 
+        jogador.sendSystemMessage(
+                Component.literal(
+                        "[NPHG] ETAPA 4: Personagens preparados."
+                )
+        );
+
         if (!ControladorCompeticao.podeIniciar(
                 mundo,
                 selecao
         )) {
             jogador.sendSystemMessage(
                     Component.literal(
-                            "Ja existe uma competicao ativa."
+                            "[NPHG] ERRO: Competicao ja ativa."
                     )
             );
             return;
         }
+
+        jogador.sendSystemMessage(
+                Component.literal(
+                        "[NPHG] ETAPA 5: Iniciando construcoes."
+                )
+        );
 
         BlockPos origem = jogador.blockPosition();
 
@@ -108,10 +158,9 @@ public final class ReceptorInicioCompeticao {
 
         jogador.sendSystemMessage(
                 Component.literal(
-                        "Competicao iniciada! Tema: "
-                                + dados.getTema().getNome()
-                                + " | Participantes: "
-                                + iniciados.size()
+                        "[NPHG] ETAPA 6: "
+                        + iniciados.size()
+                        + " construcao(oes) iniciada(s)."
                 )
         );
     }
