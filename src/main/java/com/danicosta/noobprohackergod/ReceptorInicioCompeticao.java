@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permissions;
 
 public final class ReceptorInicioCompeticao {
 
@@ -56,7 +57,8 @@ public final class ReceptorInicioCompeticao {
             return;
         }
 
-        if (!jogador.hasPermissions(2)) {
+        if (!jogador.permissions()
+                .hasPermission(Permissions.COMMANDS_MODERATOR)) {
             jogador.sendSystemMessage(
                     Component.literal(
                             "Voce precisa de permissao de operador."
@@ -66,20 +68,6 @@ public final class ReceptorInicioCompeticao {
         }
 
         ServerLevel mundo = jogador.level();
-
-        GerenciadorConstrucoes gerenciador =
-                NoobProHackerGod.getGerenciador(
-                        jogador.getServer()
-                );
-
-        if (gerenciador == null) {
-            jogador.sendSystemMessage(
-                    Component.literal(
-                            "Gerenciador de construcoes indisponivel."
-                    )
-            );
-            return;
-        }
 
         SelecaoPersonagens selecao =
                 new SelecaoPersonagens();
@@ -92,7 +80,7 @@ public final class ReceptorInicioCompeticao {
         }
 
         if (!ControladorCompeticao.podeIniciar(
-                gerenciador,
+                mundo,
                 selecao
         )) {
             jogador.sendSystemMessage(
