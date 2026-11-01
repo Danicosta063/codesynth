@@ -1,6 +1,8 @@
 
 package com.danicosta.noobprohackergod;
 
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -200,13 +202,28 @@ public final class TelaSelecaoPersonagens extends Screen {
             return;
         }
 
-        mensagemStatus =
-                "Configuracao pronta! "
-                + configuracao.getQuantidadePersonagens()
-                + " personagem(ns).";
+        if (!ClientPlayNetworking.canSend(
+                PacoteInicioCompeticao.TYPE
+        )) {
+            mensagemStatus =
+                    "Servidor nao aceita este pacote.";
+            return;
+        }
 
-        // A comunicacao com o servidor
-        // sera implementada posteriormente.
+        PacoteInicioCompeticao pacote =
+                PacoteInicioCompeticao.criar(
+                        indiceTema,
+                        configuracao.getPersonagens()
+                );
+
+        ClientPlayNetworking.send(pacote);
+
+        mensagemStatus =
+                "Pedido enviado ao servidor!";
+
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(null);
+        }
     }
 
     @Override
