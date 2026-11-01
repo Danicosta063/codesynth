@@ -4,7 +4,7 @@
   "id": "noobprohackergod",
   "version": "${version}",
   "name": "Noob Pro Hacker God",
-  "description": "Mod de competicoes de construcao entre Noob, Pro, Hacker e God.",
+  "description": "Quatro personagens competem construindo projetos de diferentes complexidades.",
   "authors": [
     "DaniCosta"
   ],
@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "com.danicosta.noobprohackergod.NoobProHackerGod"
+    ],
+    "client": [
+      "com.danicosta.noobprohackergod.NoobProHackerGodClient"
     ]
   },
   "depends": {
