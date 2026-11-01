@@ -31,6 +31,9 @@ public final class NoobProHackerGod
     @Override
     public void onInitialize() {
 
+        // Registra o tipo de entidade dos construtores.
+        RegistroEntidades.inicializar();
+
         // Registra o formato do pacote cliente-servidor.
         PayloadTypeRegistry.playC2S().register(
                 PacoteInicioCompeticao.TYPE,
