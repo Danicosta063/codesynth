@@ -206,23 +206,41 @@ public final class TelaSelecaoPersonagens extends Screen {
                 PacoteInicioCompeticao.TYPE
         )) {
             mensagemStatus =
-                    "Servidor nao aceita este pacote.";
+                    "ERRO: servidor nao aceita o pacote!";
             return;
         }
 
-        PacoteInicioCompeticao pacote =
-                PacoteInicioCompeticao.criar(
-                        indiceTema,
-                        configuracao.getPersonagens()
+        try {
+            PacoteInicioCompeticao pacote =
+                    PacoteInicioCompeticao.criar(
+                            indiceTema,
+                            configuracao.getPersonagens()
+                    );
+
+            ClientPlayNetworking.send(pacote);
+
+            mensagemStatus =
+                    "Pacote enviado! Verifique o chat.";
+
+            if (this.minecraft != null
+                    && this.minecraft.player != null) {
+
+                this.minecraft.player.displayClientMessage(
+                        Component.literal(
+                                "[NPHG] Pacote enviado ao servidor."
+                        ),
+                        false
                 );
+            }
 
-        ClientPlayNetworking.send(pacote);
+        } catch (Exception erro) {
+            mensagemStatus =
+                    "ERRO: " + erro.getClass().getSimpleName();
 
-        mensagemStatus =
-                "Pedido enviado ao servidor!";
-
-        if (this.minecraft != null) {
-            this.minecraft.setScreen(null);
+            NoobProHackerGod.LOGGER.error(
+                    "Falha ao enviar competicao",
+                    erro
+            );
         }
     }
 
