@@ -17,6 +17,9 @@ public final class TelaSelecaoPersonagens extends Screen {
     private int indiceTema = 0;
 
     private Button botaoTema;
+    private Button botaoIniciar;
+
+    private String mensagemStatus = "";
 
     public TelaSelecaoPersonagens() {
         super(Component.literal(
@@ -29,7 +32,7 @@ public final class TelaSelecaoPersonagens extends Screen {
         super.init();
 
         int centroX = this.width / 2;
-        int inicioY = this.height / 2 - 85;
+        int inicioY = this.height / 2 - 95;
 
         adicionarBotao(
                 PersonagemTipo.NOOB,
@@ -93,17 +96,33 @@ public final class TelaSelecaoPersonagens extends Screen {
 
         atualizarBotaoTema();
 
+        botaoIniciar = addRenderableWidget(
+                Button.builder(
+                        Component.literal(
+                                "Iniciar competicao"
+                        ),
+                        botao -> iniciarCompeticao()
+                ).bounds(
+                        centroX - 100,
+                        inicioY + 158,
+                        200,
+                        20
+                ).build()
+        );
+
         addRenderableWidget(
                 Button.builder(
                         Component.literal("Fechar"),
                         botao -> onClose()
                 ).bounds(
                         centroX - 100,
-                        inicioY + 150,
+                        inicioY + 184,
                         200,
                         20
                 ).build()
         );
+
+        atualizarBotaoIniciar();
     }
 
     private void adicionarBotao(
@@ -121,6 +140,8 @@ public final class TelaSelecaoPersonagens extends Screen {
                     pressionado.setMessage(
                             textoPersonagem(personagem)
                     );
+
+                    atualizarBotaoIniciar();
                 }
         ).bounds(x, y, 100, 20).build();
 
@@ -150,6 +171,8 @@ public final class TelaSelecaoPersonagens extends Screen {
         configuracao.selecionarTema(indiceTema);
 
         atualizarBotaoTema();
+
+        mensagemStatus = "";
     }
 
     private void atualizarBotaoTema() {
@@ -161,6 +184,29 @@ public final class TelaSelecaoPersonagens extends Screen {
                     )
             );
         }
+    }
+
+    private void atualizarBotaoIniciar() {
+        if (botaoIniciar != null) {
+            botaoIniciar.active =
+                    configuracao.podeIniciar();
+        }
+    }
+
+    private void iniciarCompeticao() {
+        if (!configuracao.podeIniciar()) {
+            mensagemStatus =
+                    "Selecione pelo menos um personagem.";
+            return;
+        }
+
+        mensagemStatus =
+                "Configuracao pronta! "
+                + configuracao.getQuantidadePersonagens()
+                + " personagem(ns).";
+
+        // A comunicacao com o servidor
+        // sera implementada posteriormente.
     }
 
     @Override
@@ -178,13 +224,13 @@ public final class TelaSelecaoPersonagens extends Screen {
         );
 
         int centroX = this.width / 2;
-        int inicioY = this.height / 2 - 85;
+        int inicioY = this.height / 2 - 95;
 
         graficos.drawCenteredString(
                 this.font,
                 "NOOB PRO HACKER GOD",
                 centroX,
-                inicioY - 40,
+                inicioY - 30,
                 0xFFFFFF
         );
 
@@ -192,7 +238,7 @@ public final class TelaSelecaoPersonagens extends Screen {
                 this.font,
                 "Selecione os personagens",
                 centroX,
-                inicioY - 25,
+                inicioY - 15,
                 0xAAAAAA
         );
 
@@ -236,6 +282,16 @@ public final class TelaSelecaoPersonagens extends Screen {
                 inicioY + 143,
                 0xAAAAAA
         );
+
+        if (!mensagemStatus.isEmpty()) {
+            graficos.drawCenteredString(
+                    this.font,
+                    mensagemStatus,
+                    centroX,
+                    inicioY + 210,
+                    0x55FF55
+            );
+        }
     }
 
     @Override
