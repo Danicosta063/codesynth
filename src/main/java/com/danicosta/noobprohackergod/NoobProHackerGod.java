@@ -31,10 +31,14 @@ public final class NoobProHackerGod
     @Override
     public void onInitialize() {
 
+        // Registra o formato do pacote cliente-servidor.
         PayloadTypeRegistry.playC2S().register(
                 PacoteInicioCompeticao.TYPE,
                 PacoteInicioCompeticao.CODEC
         );
+
+        // Registra quem recebe o pacote no servidor.
+        ReceptorInicioCompeticao.registrar();
 
         ServerLifecycleEvents.SERVER_STARTED.register(
                 servidor -> {
@@ -80,7 +84,7 @@ public final class NoobProHackerGod
         );
 
         LOGGER.info(
-                "Pacote de inicio da competicao registrado."
+                "Comunicacao cliente-servidor registrada."
         );
     }
 
