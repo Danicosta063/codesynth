@@ -76,8 +76,9 @@ public final class FabricaSessoesConstrucao {
             int frenteX,
             int frenteZ
     ) {
-        int lateralX = frenteZ;
-        int lateralZ = -frenteX;
+        // Mesma orientacao lateral do TransformadorConstrucao.
+        int lateralX = -frenteZ;
+        int lateralZ = frenteX;
 
         int xFinal = origem.getX()
                 + lateralX * 63
