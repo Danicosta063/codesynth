@@ -8,7 +8,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 
 import net.minecraft.client.KeyMapping;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 import org.lwjgl.glfw.GLFW;
@@ -50,13 +49,11 @@ public final class NoobProHackerGodClient
                 cliente -> {
                     while (teclaInterface.consumeClick()) {
 
-                        if (cliente.player != null) {
-                            cliente.player.displayClientMessage(
-                                    Component.literal(
-                                            "Noob Pro Hacker God: "
-                                            + "tecla N detectada!"
-                                    ),
-                                    true
+                        if (cliente.player != null
+                                && cliente.screen == null) {
+
+                            cliente.setScreen(
+                                    new TelaSelecaoPersonagens()
                             );
                         }
                     }
@@ -68,7 +65,7 @@ public final class NoobProHackerGodClient
         );
 
         LOGGER.info(
-                "Tecla N registrada com sucesso."
+                "Tecla N configurada para abrir a interface."
         );
     }
         }
