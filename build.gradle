@@ -14,13 +14,24 @@ base {
 repositories {
     mavenCentral()
     maven {
-        name = 'Fabric'
         url = 'https://maven.fabricmc.net/'
     }
 }
 
+loom {
+    splitEnvironmentSourceSets()
+
+    mods {
+        "noobprohackergod" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
 dependencies {
-    minecraft "com.mojang:minecraft:1.21.11"
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
     mappings loom.officialMojangMappings()
 
     modImplementation "net.fabricmc:fabric-loader:0.18.1"
@@ -29,20 +40,29 @@ dependencies {
 }
 
 processResources {
-    inputs.property 'version', project.version
+    inputs.property "version", project.version
 
-    filesMatching('fabric.mod.json') {
-        expand 'version': project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.release = 21
-    options.encoding = 'UTF-8'
+    options.encoding = "UTF-8"
 }
 
 java {
     withSourcesJar()
+
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    from("LICENSE") {
+        rename {
+            "${it}_${project.base.archivesName.get()}"
+        }
+    }
 }
